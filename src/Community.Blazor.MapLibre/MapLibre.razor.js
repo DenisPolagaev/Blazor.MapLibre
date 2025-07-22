@@ -468,6 +468,16 @@ export function getLayersOrder(container) {
 }
 
 /**
+ * Checks if a layer exists in the map's style by its ID.
+ * @param {string} container - The identifier of the map container.
+ * @param {string} id - The ID of the layer to check.
+ * @returns {boolean} True if the layer exists, false otherwise.
+ */
+export function hasLayer(container, id) {
+    return !!mapInstances[container]?.getLayer(id);
+}
+
+/**
  * Retrieves the value of a specified layout property for a given layer in a map container.
  *
  * @function
@@ -617,6 +627,16 @@ export function getSky(container) {
  */
 export function getSource(container, id) {
     return mapInstances[container].getSource(id);
+}
+
+/**
+ * Checks if a source exists in the map's style by its ID.
+ * @param {string} container - The identifier of the map container.
+ * @param {string} id - The ID of the source to check.
+ * @returns {boolean} True if the source exists, false otherwise.
+ */
+export function hasSource(container, id) {
+    return !!mapInstances[container]?.getSource(id);
 }
 
 /**
