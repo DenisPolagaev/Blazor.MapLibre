@@ -48,6 +48,10 @@ public abstract class Layer
     [JsonPropertyName("filter")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public object? Filter { get; set; } // ["==", ["get", "color" ], "polygon"]
+
+    [JsonPropertyName("source-layer")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceLayer { get; set; }
 }
 
 public abstract class Layer<TLayout, TPaint> : Layer
