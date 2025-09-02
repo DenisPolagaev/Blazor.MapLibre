@@ -92,8 +92,8 @@ export function addControl(container, controlType, position) {
 
     const ControlClass = controlsMap[controlType];
     if (ControlClass) {
-        const control = new ControlClass(position);
-        map.addControl(control);
+        const control = new ControlClass();
+        map.addControl(control, position);
     } else {
         console.warn(`Control type '${controlType}' is not supported.`);
     }

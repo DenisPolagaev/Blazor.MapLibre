@@ -214,6 +214,8 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public async Task<Listener> OnClick(string? layerId, Action<MapMouseEvent> handler) =>
         await AddListener("click", handler, layerId);
 
+    public async Task<Listener> OnZoomChange(Action<MapEvent> handler) =>
+        await AddListener("zoom", handler);
     #endregion
 
     #region Methods
