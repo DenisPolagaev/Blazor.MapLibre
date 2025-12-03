@@ -399,7 +399,7 @@ export function getCenterElevation(container) {
  * @param {string} container - The identifier for the desired container.
  * @returns {*} The container instance associated with the specified container identifier.
  */
-export function etContainer(container) {
+export function getContainer(container) {
     return mapInstances[container].getContainer();
 }
 
@@ -785,7 +785,7 @@ export function listens(container, type) {
  * @param {string} container - The map container.
  * @returns {string[]} A list of all image IDs.
  */
-export function istImages(container) {
+export function listImages(container) {
     return mapInstances[container].listImages();
 }
 
@@ -1303,6 +1303,9 @@ export async function executeTransaction(container, data) {
                 break;
             case "addSprite":
                 addSprite(container, d.data[0], d.data[1], d.data[2]);
+                break;
+            case "setSourceData":
+                setSourceData(container, d.data[0], d.data[1]);
                 break;
             case "removeControl":
                 removeControl(container, d.data[0]);
