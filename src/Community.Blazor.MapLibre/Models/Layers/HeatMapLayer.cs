@@ -24,7 +24,13 @@ public class HeatMapLayer : Layer<HeatMapLayerLayout, HeatMapLayerPaint>
     public string? SourceLayer { get; set; }
 }
 
-public class HeatMapLayerLayout;
+public class HeatMapLayerLayout
+{
+    [JsonPropertyName("visibility")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<string>))]
+    public OneOf<string, JsonArray>? Visibility { get; set; }
+}
 public class HeatMapLayerPaint
 {
     /// <summary>

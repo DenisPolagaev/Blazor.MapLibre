@@ -317,4 +317,20 @@ public class FillLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<object>))]
     public OneOf<object, JsonArray>? FillPattern { get; set; }
+
+    /// <summary>
+    /// The opacity of the entire fill layer. Not data-driven.
+    /// </summary>
+    [JsonPropertyName("fill-layer-opacity")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? FillLayerOpacity { get; set; }
+
+    /// <summary>
+    /// Controls the intensity of light emitted on the source features.
+    /// </summary>
+    [JsonPropertyName("fill-emissive-strength")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? FillEmissiveStrength { get; set; }
 }

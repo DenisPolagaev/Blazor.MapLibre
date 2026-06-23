@@ -10,6 +10,7 @@ namespace Community.Blazor.MapLibre.Models.Layers;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(BackgroundLayer), "background")]
 [JsonDerivedType(typeof(CircleLayer), "circle")]
+[JsonDerivedType(typeof(ColorReliefLayer), "color-relief")]
 [JsonDerivedType(typeof(FillExtrusionLayer), "fill-extrusion")]
 [JsonDerivedType(typeof(FillLayer), "fill")]
 [JsonDerivedType(typeof(HeatMapLayer), "heatmap")]
@@ -47,6 +48,13 @@ public abstract class Layer
     [JsonPropertyName("source-layer")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourceLayer { get; set; }
+
+    /// <summary>
+    /// Arbitrary properties useful to track with the layer, but do not influence rendering.
+    /// </summary>
+    [JsonPropertyName("metadata")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? Metadata { get; set; }
 }
 
 public abstract class Layer<TLayout, TPaint> : Layer

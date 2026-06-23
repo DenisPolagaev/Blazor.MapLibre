@@ -92,6 +92,14 @@ public class LineLayerPaint
     public OneOf<double, JsonArray>? LineOpacity { get; set; }
 
     /// <summary>
+    /// The opacity of the entire line layer. Not data-driven.
+    /// </summary>
+    [JsonPropertyName("line-layer-opacity")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? LineLayerOpacity { get; set; }
+
+    /// <summary>
     /// The color with which the line will be drawn. Defaults to #000000.
     /// </summary>
     [JsonPropertyName("line-color")]

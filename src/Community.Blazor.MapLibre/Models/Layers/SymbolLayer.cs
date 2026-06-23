@@ -623,4 +623,14 @@ public class SymbolLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<MapViewport>))]
     public OneOf<MapViewport, JsonArray>? TextTranslateAnchor { get; set; }
+
+    [JsonPropertyName("icon-emissive-strength")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? IconEmissiveStrength { get; set; }
+
+    [JsonPropertyName("text-emissive-strength")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? TextEmissiveStrength { get; set; }
 }

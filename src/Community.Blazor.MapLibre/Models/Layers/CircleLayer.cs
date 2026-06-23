@@ -22,17 +22,26 @@ public class CircleLayer : Layer<CircleLayerLayout, CircleLayerPaint>
     [JsonPropertyName("source-layer")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourceLayer { get; set; }
-
-    [JsonPropertyName("circle-sort-key")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public double? CircleSortKey { get; set; }
-
-    [JsonPropertyName("visibility")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Visibility? Visibility { get; set; }
 }
 
-public class CircleLayerLayout;
+public class CircleLayerLayout
+{
+    /// <summary>
+    /// Sorts features in ascending order based on this value. Features with a higher sort key appear above features with a lower sort key.
+    /// </summary>
+    [JsonPropertyName("circle-sort-key")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? CircleSortKey { get; set; }
+
+    /// <summary>
+    /// Controls whether this layer is displayed.
+    /// </summary>
+    [JsonPropertyName("visibility")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<string>))]
+    public OneOf<string, JsonArray>? Visibility { get; set; }
+}
 
 public class CircleLayerPaint
 {
@@ -90,6 +99,14 @@ public class CircleLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? CircleStrokeOpacity { get; set; }
+
+    /// <summary>
+    /// Controls the intensity of light emitted on the source features.
+    /// </summary>
+    [JsonPropertyName("circle-emissive-strength")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? CircleEmissiveStrength { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
