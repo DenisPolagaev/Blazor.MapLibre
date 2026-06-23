@@ -174,4 +174,10 @@ public enum EventType
 
     [JsonStringEnumMemberName("terrain")]
     Terrain,
+
+    [JsonStringEnumMemberName("open")]
+    Open,
+
+    [JsonStringEnumMemberName("close")]
+    Close,
 }

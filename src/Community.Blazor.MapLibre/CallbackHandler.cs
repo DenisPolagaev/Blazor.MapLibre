@@ -13,6 +13,7 @@ public class CallbackHandler
     private readonly string _eventType;
     private readonly Delegate _callbackDelegate;
     private readonly Type? _argumentType;
+    private readonly string? _removeMethod;
     private string? _listenerId;
     private DotNetObjectReference<CallbackHandler>? _dotNetReference;
     private Action<string>? _onRemoved;
@@ -43,13 +44,15 @@ public class CallbackHandler
         string mapId,
         string eventType,
         Delegate callbackDelegate,
-        Type argumentType)
+        Type argumentType,
+        string? removeMethod = null)
     {
         _jsModule = jsModule;
         _mapId = mapId;
         _eventType = eventType;
         _callbackDelegate = callbackDelegate;
         _argumentType = argumentType;
+        _removeMethod = removeMethod;
     }
 
     /// <summary>
@@ -77,7 +80,14 @@ public class CallbackHandler
         if (_listenerId is not null)
         {
             var removedId = _listenerId;
-            await _jsModule.InvokeVoidAsync("off", _mapId, removedId);
+            if (_removeMethod is not null)
+            {
+                await _jsModule.InvokeVoidAsync(_removeMethod, removedId);
+            }
+            else
+            {
+                await _jsModule.InvokeVoidAsync("off", _mapId, removedId);
+            }
             _onRemoved?.Invoke(removedId);
             _listenerId = null;
         }

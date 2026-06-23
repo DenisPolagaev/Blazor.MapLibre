@@ -1,11 +1,16 @@
 import splitGeoJSON from './geojson-antimeridian-cut/cut.js'
 
-const mapInstances = {};
-const optionsInstances = {};
-const markerInstances = {};
-const currentLocationMarkerInstances = {};
-const scaleControlInstances = {};
-const listenerRegistry = {};
+const mapInstances = globalThis.__blazorMapLibreMapInstances ??= {};
+const optionsInstances = globalThis.__blazorMapLibreOptionsInstances ??= {};
+const markerInstances = globalThis.__blazorMapLibreMarkerInstances ??= {};
+const popupInstances = globalThis.__blazorMapLibrePopupInstances ??= {};
+const currentLocationMarkerInstances = globalThis.__blazorMapLibreCurrentLocationMarkers ??= {};
+const markerListenerRegistry = globalThis.__blazorMapLibreMarkerListeners ??= {};
+const popupListenerRegistry = globalThis.__blazorMapLibrePopupListeners ??= {};
+const markerContainers = globalThis.__blazorMapLibreMarkerContainers ??= {};
+const popupContainers = globalThis.__blazorMapLibrePopupContainers ??= {};
+const scaleControlInstances = globalThis.__blazorMapLibreScaleControls ??= {};
+const listenerRegistry = globalThis.__blazorMapLibreListenerRegistry ??= {};
 
 /**
  * Ensures maplibre-gl is on globalThis before creating maps.
@@ -233,6 +238,26 @@ function createTransformConstrainFn(dotnetReference) {
     };
 }
 
+function resolveContainerKey(container) {
+    if (typeof container === 'string') {
+        return container;
+    }
+
+    if (container && typeof container === 'object' && container.id) {
+        return container.id;
+    }
+
+    return null;
+}
+
+function resolveContainerElement(container) {
+    if (typeof container === 'string') {
+        return document.getElementById(container);
+    }
+
+    return container;
+}
+
 /**
  * Initializes a MapLibre map instance with the given options and connects it to a .NET reference for interop functionality.
  *
@@ -248,20 +273,46 @@ export function initializeMap(options, dotnetReference, transformConstrainRefere
         };
     }
 
-    const map = new globalThis.maplibregl.Map(options);
+    const containerKey = resolveContainerKey(options?.container);
+    if (!containerKey) {
+        throw new Error('MapOptions.container must be a DOM element id or an element with an id.');
+    }
 
-    optionsInstances[options.container] = options;
-    mapInstances[options.container] = map;
+    const containerElement = resolveContainerElement(options.container);
+    if (!containerElement) {
+        throw new Error(`Map container element "${containerKey}" was not found in the DOM.`);
+    }
+
+    const map = new globalThis.maplibregl.Map({
+        ...options,
+        container: containerElement,
+    });
+
+    optionsInstances[containerKey] = options;
+    mapInstances[containerKey] = map;
+
+    const invokeLoadCallback = () => {
+        dotnetReference.invokeMethodAsync("OnLoadCallback").catch(console.error);
+    };
 
     map.on('style.load', () => {
         dotnetReference.invokeMethodAsync("OnStyleLoadCallback").catch(console.error);
     });
 
-    map.on('load', () => {
-        dotnetReference.invokeMethodAsync("OnLoadCallback").catch(console.error);
-    });
+    if (map.loaded()) {
+        queueMicrotask(invokeLoadCallback);
+    } else {
+        map.once('load', invokeLoadCallback);
+    }
 
     return map;
+}
+
+/**
+ * Returns whether a map instance is registered for the given container id.
+ */
+export function hasMap(container) {
+    return Boolean(mapInstances[container]);
 }
 
 /**
@@ -1402,6 +1453,18 @@ export function remove(container) {
     if (currentLocationMarkerInstances[container]) {
         delete currentLocationMarkerInstances[container];
     }
+
+    for (const [markerId, markerContainer] of Object.entries(markerContainers)) {
+        if (markerContainer === container) {
+            removeMarker(markerId);
+        }
+    }
+
+    for (const [popupId, popupContainer] of Object.entries(popupContainers)) {
+        if (popupContainer === container) {
+            removePopup(popupId);
+        }
+    }
 }
 
 /**
@@ -1838,50 +1901,300 @@ export function zoomTo(container, zoom, options, eventData) {
     mapInstances[container].zoomTo(zoom, options, eventData);
 }
 
-export function createPopup(container, settings, options) {
-    new globalThis.maplibregl.Popup(options)
-        .setLngLat([settings.lngLat.lng, settings.lngLat.lat])
-        .setHTML(settings.content)
-        .addTo(mapInstances[container]);
+function resolveMarkerOptions(options) {
+    const resolved = { ...options };
+    delete resolved.extensions;
+    delete resolved.elementId;
+
+    if (options?.elementId) {
+        resolved.element = document.getElementById(options.elementId);
+    }
+
+    return resolved;
+}
+
+function applyMarkerExtensions(marker, extensions) {
+    if (!extensions) {
+        return;
+    }
+
+    if (extensions.htmlContent?.length > 0) {
+        marker.getElement().innerHTML = extensions.htmlContent;
+    }
+
+    if (extensions.popupHtmlContent?.length > 0) {
+        marker.setPopup(
+            new globalThis.maplibregl.Popup({ offset: 25 })
+                .setHTML(extensions.popupHtmlContent)
+        );
+    }
+}
+
+function getMarker(markerId) {
+    return markerInstances[markerId];
+}
+
+function getPopup(popupId) {
+    return popupInstances[popupId];
+}
+
+function removeMarkerListeners(markerId) {
+    for (const [listenerId, entry] of markerListenerRegistry.entries()) {
+        if (entry.markerId === markerId) {
+            markerOff(listenerId);
+        }
+    }
+}
+
+function removePopupListeners(popupId) {
+    for (const [listenerId, entry] of popupListenerRegistry.entries()) {
+        if (entry.popupId === popupId) {
+            popupOff(listenerId);
+        }
+    }
+}
+
+export function createPopup(container, popupId, options, lngLat, content) {
+    const map = mapInstances[container];
+    if (!map) {
+        return;
+    }
+
+    const popup = new globalThis.maplibregl.Popup(options ?? {});
+
+    if (content?.html) {
+        popup.setHTML(content.html);
+    } else if (content?.text) {
+        popup.setText(content.text);
+    }
+
+    if (lngLat) {
+        popup.setLngLat([lngLat.lng, lngLat.lat]);
+    }
+
+    popup.addTo(map);
+    popupInstances[popupId] = popup;
+    popupContainers[popupId] = container;
 }
 
 export function createMarker(container, markerId, options, position) {
-    const elementId = options.elementId;
-    if (elementId) {
-        options.element = document.getElementById(elementId);
+    const map = mapInstances[container];
+    if (!map) {
+        return;
     }
 
-    markerInstances[markerId] = new globalThis.maplibregl.Marker(options)
+    const extensions = options?.extensions;
+    const resolvedOptions = resolveMarkerOptions(options ?? {});
+    const marker = new globalThis.maplibregl.Marker(resolvedOptions)
         .setLngLat([position.lng, position.lat])
-        .addTo(mapInstances[container]);
+        .addTo(map);
 
-    if (options.extensions) {
-        const extensions = options.extensions;
+    applyMarkerExtensions(marker, extensions);
 
-        if (extensions.htmlContent?.length > 0) {
-            markerInstances[markerId].getElement().innerHTML = extensions.htmlContent;
-        }
-
-        if (extensions.popupHtmlContent?.length > 0) {
-            markerInstances[markerId].setPopup(
-                new globalThis.maplibregl.Popup({ offset: 25 })
-                    .setHTML(extensions.popupHtmlContent)
-            );
-        }
-    }
+    markerInstances[markerId] = marker;
+    markerContainers[markerId] = container;
 }
 
 export function removeMarker(markerId) {
+    removeMarkerListeners(markerId);
+
     const marker = markerInstances[markerId];
+    if (!marker) {
+        return;
+    }
 
     marker.remove();
     delete markerInstances[markerId];
+    delete markerContainers[markerId];
+}
+
+export function removePopup(popupId) {
+    removePopupListeners(popupId);
+
+    const popup = popupInstances[popupId];
+    if (!popup) {
+        return;
+    }
+
+    popup.remove();
+    delete popupInstances[popupId];
+    delete popupContainers[popupId];
+}
+
+export function invokeMarker(markerId, method, args) {
+    const marker = getMarker(markerId);
+    if (!marker) {
+        throw new Error(`Marker not found: ${markerId}`);
+    }
+
+    const payload = args ?? [];
+
+    switch (method) {
+        case 'setLngLat': {
+            const position = payload[0];
+            marker.setLngLat([position.lng, position.lat]);
+            return null;
+        }
+        case 'getLngLat': {
+            const lngLat = marker.getLngLat();
+            return { lng: lngLat.lng, lat: lngLat.lat };
+        }
+        case 'setOffset': {
+            marker.setOffset(payload[0]);
+            return null;
+        }
+        case 'getOffset': {
+            const point = marker.getOffset();
+            return [point.x, point.y];
+        }
+        case 'setOpacity': {
+            marker.setOpacity(payload[0], payload[1]);
+            return null;
+        }
+        case 'setPopup': {
+            const popupId = payload[0];
+            marker.setPopup(popupId ? getPopup(popupId) : null);
+            return null;
+        }
+        case 'getPopup': {
+            const popup = marker.getPopup();
+            if (!popup) {
+                return null;
+            }
+
+            for (const [popupId, instance] of Object.entries(popupInstances)) {
+                if (instance === popup) {
+                    return popupId;
+                }
+            }
+
+            return null;
+        }
+        case 'addTo': {
+            const container = payload[0];
+            marker.addTo(mapInstances[container]);
+            markerContainers[markerId] = container;
+            return null;
+        }
+        case 'setPitchAlignment':
+            marker.setPitchAlignment(payload[0] ?? undefined);
+            return null;
+        case 'setRotationAlignment':
+            marker.setRotationAlignment(payload[0] ?? undefined);
+            return null;
+        default: {
+            const result = marker[method](...(payload.length ? payload : []));
+            return result ?? null;
+        }
+    }
+}
+
+export function invokePopup(popupId, method, args) {
+    const popup = getPopup(popupId);
+    if (!popup) {
+        throw new Error(`Popup not found: ${popupId}`);
+    }
+
+    const payload = args ?? [];
+
+    switch (method) {
+        case 'setLngLat': {
+            const position = payload[0];
+            popup.setLngLat([position.lng, position.lat]);
+            return null;
+        }
+        case 'getLngLat': {
+            const lngLat = popup.getLngLat();
+            return { lng: lngLat.lng, lat: lngLat.lat };
+        }
+        case 'setHTML':
+            popup.setHTML(payload[0]);
+            return null;
+        case 'setText':
+            popup.setText(payload[0]);
+            return null;
+        case 'setPadding':
+            popup.setPadding(payload[0]);
+            return null;
+        case 'addTo': {
+            const container = payload[0];
+            popup.addTo(mapInstances[container]);
+            popupContainers[popupId] = container;
+            return null;
+        }
+        default: {
+            const result = popup[method](...(payload.length ? payload : []));
+            return result ?? null;
+        }
+    }
+}
+
+export function markerOn(markerId, eventType, dotnetReference) {
+    const marker = getMarker(markerId);
+    if (!marker) {
+        throw new Error(`Marker not found: ${markerId}`);
+    }
+
+    const listenerId = crypto.randomUUID();
+    const handler = () => {
+        const lngLat = marker.getLngLat();
+        const payload = JSON.stringify({
+            type: eventType,
+            lngLat: { lng: lngLat.lng, lat: lngLat.lat },
+        });
+        dotnetReference.invokeMethodAsync('Invoke', payload).catch(console.error);
+    };
+
+    marker.on(eventType, handler);
+    markerListenerRegistry[listenerId] = { markerId, eventType, handler };
+    return listenerId;
+}
+
+export function markerOff(listenerId) {
+    const entry = markerListenerRegistry[listenerId];
+    if (!entry) {
+        return;
+    }
+
+    const marker = getMarker(entry.markerId);
+    marker?.off(entry.eventType, entry.handler);
+    delete markerListenerRegistry[listenerId];
+}
+
+export function popupOn(popupId, eventType, dotnetReference) {
+    const popup = getPopup(popupId);
+    if (!popup) {
+        throw new Error(`Popup not found: ${popupId}`);
+    }
+
+    const listenerId = crypto.randomUUID();
+    const handler = () => {
+        const lngLat = popup.getLngLat();
+        const payload = JSON.stringify({
+            type: eventType,
+            lngLat: { lng: lngLat.lng, lat: lngLat.lat },
+        });
+        dotnetReference.invokeMethodAsync('Invoke', payload).catch(console.error);
+    };
+
+    popup.on(eventType, handler);
+    popupListenerRegistry[listenerId] = { popupId, eventType, handler };
+    return listenerId;
+}
+
+export function popupOff(listenerId) {
+    const entry = popupListenerRegistry[listenerId];
+    if (!entry) {
+        return;
+    }
+
+    const popup = getPopup(entry.popupId);
+    popup?.off(entry.eventType, entry.handler);
+    delete popupListenerRegistry[listenerId];
 }
 
 export function moveMarker(markerId, position) {
-    const marker = markerInstances[markerId];
-
-    marker.setLngLat([position.lng, position.lat]);
+    invokeMarker(markerId, 'setLngLat', [position]);
 }
 
 export function createCurrentLocationMarker(container, options, position) {
