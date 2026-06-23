@@ -22,14 +22,14 @@
 <div id="@_containerId" class="comparison-container rounded-top">
     <MapLibre @ref="_beforeMap"
               MapId="@_beforeMapId"
-              Options="_mapOptions"
+              Options="_beforeMapOptions"
               OnLoad="OnBeforeMapLoaded"
               Class="map"
               Height="100%"
               Width="100%" />
     <MapLibre @ref="_afterMap"
               MapId="@_afterMapId"
-              Options="_mapOptions"
+              Options="_afterMapOptions"
               OnLoad="OnAfterMapLoaded"
               Class="map"
               Height="100%"
@@ -88,7 +88,14 @@
     private double _sliderPosition;
     private string? _errorMessage;
 
-    private readonly MapOptions _mapOptions = new()
+    private readonly MapOptions _beforeMapOptions = new()
+    {
+        Style = ExampleMapStyles.OpenStreetMap,
+        Center = new LngLat(-94.58, 39.10),
+        Zoom = 10,
+    };
+
+    private readonly MapOptions _afterMapOptions = new()
     {
         Style = ExampleMapStyles.OpenStreetMap,
         Center = new LngLat(-94.58, 39.10),

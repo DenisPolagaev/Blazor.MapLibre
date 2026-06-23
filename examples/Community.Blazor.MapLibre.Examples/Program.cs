@@ -19,5 +19,17 @@ builder.RootComponents.RegisterCustomElement<TerraDraw>("terra-draw");
 builder.RootComponents.RegisterCustomElement<MapCompare>("map-compare");
 builder.RootComponents.RegisterCustomElement<MultipleMaps>("multiple-maps");
 builder.RootComponents.RegisterCustomElement<RenderGlobe>("render-globe");
+builder.RootComponents.RegisterCustomElement<UpdateGeoJsonDiff>("update-geojson-diff");
+builder.RootComponents.RegisterCustomElement<GlobalStateVisibility>("global-state-visibility");
+builder.RootComponents.RegisterCustomElement<LineLayerExample>("line-layer");
+builder.RootComponents.RegisterCustomElement<CircleLayerExample>("circle-layer");
+builder.RootComponents.RegisterCustomElement<RasterStyling>("raster-styling");
+builder.RootComponents.RegisterCustomElement<HillshadeTerrain>("hillshade-terrain");
+builder.RootComponents.RegisterCustomElement<FillExtrusion>("fill-extrusion");
+builder.RootComponents.RegisterCustomElement<MapEvents>("map-events");
+builder.RootComponents.RegisterCustomElement<SymbolLabels>("symbol-labels");
+builder.RootComponents.RegisterCustomElement<SkyFogTerrain>("sky-fog-terrain");
+builder.RootComponents.RegisterCustomElement<GlobeAtmosphere>("globe-atmosphere");
+builder.RootComponents.RegisterCustomElement<ColorReliefTerrain>("color-relief-terrain");
 
 await builder.Build().RunAsync();
