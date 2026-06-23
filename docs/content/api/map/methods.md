@@ -53,4 +53,12 @@ The `MapLibre` component wraps MapLibre GL JS 5.17. Key methods added in recent 
 - `MapEvent.GetOriginalDomEvent()` for typed DOM fields from `originalEvent`
 - Use `MapEventNames` for event name constants.
 
+## Marker and Popup
+
+- `AddMarker(options, position)` — returns `MapMarker` handle (`SetLngLat`, `SetRotation`, `SetDraggable`, `SetPopup`, `TogglePopup`, class names, events)
+- `AddPopup(options, lngLat, html|PopupContent)` — returns `MapPopup` handle (`SetHtml`, `SetText`, `TrackPointer`, `IsOpen`, events)
+- `CreatePopup` — legacy wrapper around `AddPopup`
+- Marker events: `OnClick`, `OnDragStart`, `OnDrag`, `OnDragEnd` on `MapMarker`
+- Popup events: `OnOpen`, `OnClose` on `MapPopup`
+
 See [Event listeners](../events/listeners.md) and [Layers overview](../layers/index.md).

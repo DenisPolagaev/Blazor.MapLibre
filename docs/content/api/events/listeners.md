@@ -43,3 +43,9 @@ await listener.Remove(); // calls map.off() in JavaScript
 - `MapMouseEvent.Features` is `LayerFeatureFeature[]` — use the same shape as `QueryRenderedLayerFeatures`.
 - Layer-scoped events require the layer to exist before subscribing.
 - **`preventDefault()` is not available from C#.** MapLibre requires calling `preventDefault()` synchronously in the JavaScript event handler. Because Blazor invokes .NET callbacks asynchronously after `JSON.stringify`, you cannot block default map gestures from C#. Use `MapOptions` instead (`CooperativeGestures`, `DragPan`, `ScrollZoom`, etc.) or handle gestures in custom JavaScript.
+
+## Marker and Popup handles
+
+- `AddMarker` returns `MapMarker` — `SetLngLat`, `SetRotation`, `SetDraggable`, `SetPopup`, `TogglePopup`, `OnClick`, `OnDrag*`
+- `AddPopup` returns `MapPopup` — `SetHtml`, `SetText`, `TrackPointer`, `IsOpen`, `OnOpen`, `OnClose`
+- `CreatePopup` remains as a legacy wrapper around `AddPopup`

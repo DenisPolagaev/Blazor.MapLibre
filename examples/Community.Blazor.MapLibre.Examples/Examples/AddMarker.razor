@@ -31,7 +31,8 @@
             }
         };
 
-        await _mapListener.AddMarker(options, new LngLat(Random.Shared.NextDouble() * 180 - 90, Random.Shared.Next(-90, 90)));
+        var marker = await _mapListener.AddMarker(options, new LngLat(Random.Shared.NextDouble() * 180 - 90, Random.Shared.Next(-90, 90)));
+        await marker.OnClick(async _ => await marker.TogglePopupAsync());
     }
 
 }

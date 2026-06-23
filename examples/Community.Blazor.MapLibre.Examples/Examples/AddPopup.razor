@@ -26,21 +26,19 @@
 
         async Task AddPopup(MapMouseEvent evnt)
         {
-            await _map.CreatePopup(new Popup
-            {
-                Content = $@"
-                           <div>
-                               <h3>Map clicked</h3>
-                               <p>You clicked the map at <code>{evnt.LngLat.Latitude} {evnt.LngLat.Longitude}</code></p>
-                           </div>
-                           ",
-                Coordinates = evnt.LngLat
-            }, new PopupOptions
+            var popup = await _map.AddPopup(new PopupOptions
             {
                 CloseOnClick = true,
                 CloseOnMove = true,
                 FocusAfterOpen = true,
-            });
+            }, evnt.LngLat, $@"
+                           <div>
+                               <h3>Map clicked</h3>
+                               <p>You clicked the map at <code>{evnt.LngLat.Latitude} {evnt.LngLat.Longitude}</code></p>
+                           </div>
+                           ");
+
+            await popup.OnClose(async _ => await popup.RemoveAsync());
         }
     }
 }
