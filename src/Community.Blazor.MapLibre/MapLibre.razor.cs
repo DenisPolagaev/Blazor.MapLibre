@@ -5,11 +5,12 @@ using Community.Blazor.MapLibre.Models.Event;
 using Community.Blazor.MapLibre.Models.Feature;
 using Community.Blazor.MapLibre.Models.Image;
 using Community.Blazor.MapLibre.Models.Layers;
-using Community.Blazor.MapLibre.Models.Marker;
+using Community.Blazor.MapLibre.Models.Request;
 using Community.Blazor.MapLibre.Models.Padding;
 using Community.Blazor.MapLibre.Models.Sources;
 using Community.Blazor.MapLibre.Models.Sprite;
 using Community.Blazor.MapLibre.Models.LayerFeatures;
+using Community.Blazor.MapLibre.Models.Marker;
 using Community.Blazor.MapLibre.Models.Style;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -36,10 +37,9 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     private IJSObjectReference _jsModule = null!;
 
     /// <summary>
-    /// Manages a thread-safe dictionary for storing references to .NET object instances
-    /// used in JavaScript interop callbacks. Each reference is identified by a unique Guid.
+    /// Active event listeners registered on this map instance, keyed by listener id.
     /// </summary>
-    private readonly ConcurrentDictionary<string, DotNetObjectReference<CallbackHandler>> _references = new();
+    private readonly ConcurrentDictionary<string, CallbackHandler> _listeners = new();
 
     /// <summary>
     /// Encapsulates a reference to the current .NET instance of the Map component, enabling JavaScript interop calls
@@ -59,6 +59,8 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     private IJSObjectReference _mapObject = null!;
 
     private DotNetObjectReference<TransformConstrainCallbackHandler>? _transformConstrainReference;
+
+    private DotNetObjectReference<TransformRequestCallbackHandler>? _transformRequestReference;
 
     private readonly ConcurrentDictionary<string, DotNetObjectReference<CustomLayerHandler>> _customLayerHandlers = new();
 
@@ -215,10 +217,12 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var value in _references.Values)
+        foreach (var listener in _listeners.Values)
         {
-            value.Dispose();
+            await listener.RemoveAsync();
         }
+
+        _listeners.Clear();
 
         foreach (var value in _customLayerHandlers.Values)
         {
@@ -226,6 +230,7 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         }
 
         _transformConstrainReference?.Dispose();
+        _transformRequestReference?.Dispose();
 
         try
         {
@@ -254,9 +259,10 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <param name="eventName">The name of the event to listen for (e.g., "click", "mousemove").</param>
     /// <param name="handler">The synchronous callback action to execute when the event occurs.</param>
     /// <param name="layer">The optional layer ID where the event listener should be applied.</param>
+    /// <param name="throttleMs">Optional throttle interval in milliseconds (useful for mousemove).</param>
     /// <returns>A <see cref="Listener"/> instance that allows removal of the registered listener.</returns>
-    public Task<Listener> AddListener<T>(string eventName, Action<T> handler, object? layer = null) =>
-        AddListenerInternal<T>(eventName, handler, layer);
+    public Task<Listener> AddListener<T>(string eventName, Action<T> handler, object? layer = null, int? throttleMs = null) =>
+        AddListenerInternal<T>(eventName, handler, layer, throttleMs);
 
     /// <summary>
     /// Registers an asynchronous event listener for a specified event on the map, optionally scoped to a specific layer.
@@ -265,9 +271,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <param name="eventName">The name of the event to listen for (e.g., "click", "mousemove").</param>
     /// <param name="handler">The asynchronous callback action to execute when the event occurs.</param>
     /// <param name="layer">The optional layer ID where the event listener should be applied.</param>
+    /// <param name="throttleMs">Optional throttle interval in milliseconds (useful for mousemove).</param>
     /// <returns>A <see cref="Listener"/> instance that allows removal of the registered listener.</returns>
-    public Task<Listener> AddAsyncListener<T>(string eventName, Func<T, Task> handler, object? layer = null) =>
-        AddListenerInternal<T>(eventName, handler, layer);
+    public Task<Listener> AddAsyncListener<T>(string eventName, Func<T, Task> handler, object? layer = null, int? throttleMs = null) =>
+        AddListenerInternal<T>(eventName, handler, layer, throttleMs);
+
+    public Task<Listener> AddListener<T>(string eventName, Action<T> handler, int? throttleMs, params string[] layerIds) =>
+        AddListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null, throttleMs);
+
+    public Task<Listener> AddAsyncListener<T>(string eventName, Func<T, Task> handler, int? throttleMs, params string[] layerIds) =>
+        AddListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null, throttleMs);
 
     public Task<Listener> AddListener<T>(string eventName, Action<T> handler, params string[] layerIds) =>
         AddListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null);
@@ -275,45 +288,70 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public Task<Listener> AddAsyncListener<T>(string eventName, Func<T, Task> handler, params string[] layerIds) =>
         AddListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null);
 
-    private async Task<Listener> AddListenerInternal<T>(string eventName, Delegate handler, object? layer = null)
+    private async Task<Listener> AddListenerInternal<T>(string eventName, Delegate handler, object? layer = null, int? throttleMs = null)
     {
         var callback = new CallbackHandler(_jsModule, MapId, eventName, handler, typeof(T));
         var reference = DotNetObjectReference.Create(callback);
-        var listenerId = await _jsModule.InvokeAsync<string>("on", MapId, eventName, reference, layer);
-        callback.Attach(reference, listenerId);
-        _references.TryAdd(listenerId, reference);
+        var listenerId = await _jsModule.InvokeAsync<string>("on", MapId, eventName, reference, layer, throttleMs);
+        callback.Attach(reference, listenerId, id => _listeners.TryRemove(id, out _));
+        _listeners[listenerId] = callback;
 
         return new Listener(callback);
     }
 
-    private async Task<Listener> AddOnceListenerInternal<T>(string eventName, Delegate handler, object? layer = null)
+    private async Task<Listener> AddOnceListenerInternal<T>(string eventName, Delegate handler, object? layer = null, int? throttleMs = null)
     {
         var callback = new CallbackHandler(_jsModule, MapId, eventName, handler, typeof(T));
         var reference = DotNetObjectReference.Create(callback);
-        var listenerId = await _jsModule.InvokeAsync<string>("once", MapId, eventName, reference, layer);
-        callback.Attach(reference, listenerId);
-        _references.TryAdd(listenerId, reference);
+        var listenerId = await _jsModule.InvokeAsync<string>("once", MapId, eventName, reference, layer, throttleMs);
+        callback.Attach(reference, listenerId, id => _listeners.TryRemove(id, out _));
+        _listeners[listenerId] = callback;
 
         return new Listener(callback);
     }
 
-    public Task<Listener> AddOnceListener<T>(string eventName, Action<T> handler, object? layer = null) =>
-        AddOnceListenerInternal<T>(eventName, handler, layer);
+    public Task<Listener> AddOnceListener<T>(string eventName, Action<T> handler, object? layer = null, int? throttleMs = null) =>
+        AddOnceListenerInternal<T>(eventName, handler, layer, throttleMs);
 
-    public Task<Listener> AddOnceAsyncListener<T>(string eventName, Func<T, Task> handler, object? layer = null) =>
-        AddOnceListenerInternal<T>(eventName, handler, layer);
+    public Task<Listener> AddOnceAsyncListener<T>(string eventName, Func<T, Task> handler, object? layer = null, int? throttleMs = null) =>
+        AddOnceListenerInternal<T>(eventName, handler, layer, throttleMs);
+
+    public Task<Listener> AddOnceListener<T>(string eventName, Action<T> handler, int? throttleMs, params string[] layerIds) =>
+        AddOnceListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null, throttleMs);
+
+    public Task<Listener> AddOnceAsyncListener<T>(string eventName, Func<T, Task> handler, int? throttleMs, params string[] layerIds) =>
+        AddOnceListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null, throttleMs);
 
     /// <summary>
-    /// Registers a synchronous click event listener for the map or a specific layer.
+    /// Removes all event listeners registered on this map, optionally filtered by event name.
     /// </summary>
-    /// <param name="layerId">The optional layer ID.</param>
-    /// <param name="handler">The synchronous callback.</param>
-    /// <returns>A task of type <see cref="Listener"/>.</returns>
+    public async ValueTask RemoveAllListeners(string? eventName = null)
+    {
+        var toRemove = _listeners
+            .Where(pair => eventName is null || pair.Value.EventType == eventName)
+            .Select(pair => pair.Value)
+            .ToList();
+
+        foreach (var callback in toRemove)
+        {
+            await callback.RemoveAsync();
+        }
+    }
+
+    /// <summary>
+    /// Registers a synchronous click event listener for the map or specific layer(s).
+    /// </summary>
     public Task<Listener> OnClick(string? layerId, Action<MapMouseEvent> handler) =>
-        AddListenerInternal<MapMouseEvent>("click", handler, layerId);
+        AddListenerInternal<MapMouseEvent>(MapEventNames.Click, handler, layerId);
 
     public Task<Listener> OnClick(string? layerId, Func<MapMouseEvent, Task> handler) =>
-        AddListenerInternal<MapMouseEvent>("click", handler, layerId);
+        AddListenerInternal<MapMouseEvent>(MapEventNames.Click, handler, layerId);
+
+    public Task<Listener> OnClick(Action<MapMouseEvent> handler, params string[] layerIds) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.Click, handler, layerIds.Length > 0 ? layerIds : null);
+
+    public Task<Listener> OnClick(Func<MapMouseEvent, Task> handler, params string[] layerIds) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.Click, handler, layerIds.Length > 0 ? layerIds : null);
 
     public Task<Listener> OnZoomChange(Action<MapEvent> handler) =>
         AddListener(MapEventNames.Zoom, handler);
@@ -339,6 +377,18 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public Task<Listener> OnMouseMove(string? layerId, Func<MapMouseEvent, Task> handler) =>
         AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerId);
 
+    public Task<Listener> OnMouseMove(Action<MapMouseEvent> handler, int throttleMs, string? layerId = null) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerId, throttleMs);
+
+    public Task<Listener> OnMouseMove(Func<MapMouseEvent, Task> handler, int throttleMs, string? layerId = null) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerId, throttleMs);
+
+    public Task<Listener> OnMouseMove(Action<MapMouseEvent> handler, params string[] layerIds) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerIds.Length > 0 ? layerIds : null);
+
+    public Task<Listener> OnMouseMove(Func<MapMouseEvent, Task> handler, params string[] layerIds) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerIds.Length > 0 ? layerIds : null);
+
     public Task<Listener> OnData(Action<MapDataEvent> handler) =>
         AddListener(MapEventNames.Data, handler);
 
@@ -357,23 +407,296 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public Task<Listener> OnError(Func<MapErrorEvent, Task> handler) =>
         AddAsyncListener(MapEventNames.Error, handler);
 
-    public Task<Listener> OnTouchStart(string? layerId, Action<MapMouseEvent> handler) =>
-        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchStart, handler, layerId);
+    public Task<Listener> OnTouchStart(string? layerId, Action<MapTouchEvent> handler) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchStart, handler, layerId);
 
-    public Task<Listener> OnTouchStart(string? layerId, Func<MapMouseEvent, Task> handler) =>
-        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchStart, handler, layerId);
+    public Task<Listener> OnTouchStart(string? layerId, Func<MapTouchEvent, Task> handler) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchStart, handler, layerId);
 
-    public Task<Listener> OnTouchEnd(string? layerId, Action<MapMouseEvent> handler) =>
-        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchEnd, handler, layerId);
+    public Task<Listener> OnTouchStart(Action<MapTouchEvent> handler, params string[] layerIds) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchStart, handler, layerIds.Length > 0 ? layerIds : null);
 
-    public Task<Listener> OnTouchEnd(string? layerId, Func<MapMouseEvent, Task> handler) =>
-        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchEnd, handler, layerId);
+    public Task<Listener> OnTouchEnd(string? layerId, Action<MapTouchEvent> handler) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchEnd, handler, layerId);
+
+    public Task<Listener> OnTouchEnd(string? layerId, Func<MapTouchEvent, Task> handler) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchEnd, handler, layerId);
+
+    public Task<Listener> OnTouchMove(string? layerId, Action<MapTouchEvent> handler) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchMove, handler, layerId);
+
+    public Task<Listener> OnTouchMove(string? layerId, Func<MapTouchEvent, Task> handler) =>
+        AddListenerInternal<MapTouchEvent>(MapEventNames.TouchMove, handler, layerId);
+
+    public Task<Listener> OnTouchCancel(Action<MapTouchEvent> handler) =>
+        AddListener(MapEventNames.TouchCancel, handler);
+
+    public Task<Listener> OnTouchCancel(Func<MapTouchEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.TouchCancel, handler);
+
+    public Task<Listener> OnWheel(Action<MapWheelEvent> handler) =>
+        AddListener(MapEventNames.Wheel, handler);
+
+    public Task<Listener> OnWheel(Func<MapWheelEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Wheel, handler);
+
+    public Task<Listener> OnRender(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Render, handler);
+
+    public Task<Listener> OnRender(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Render, handler);
+
+    public Task<Listener> OnStyleImageMissing(Action<MapStyleImageMissingEvent> handler) =>
+        AddListener(MapEventNames.StyleImageMissing, handler);
+
+    public Task<Listener> OnStyleImageMissing(Func<MapStyleImageMissingEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.StyleImageMissing, handler);
+
+    public Task<Listener> OnDragStart(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.DragStart, handler);
+
+    public Task<Listener> OnDragStart(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.DragStart, handler);
+
+    public Task<Listener> OnDrag(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Drag, handler);
+
+    public Task<Listener> OnDrag(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Drag, handler);
+
+    public Task<Listener> OnDragEnd(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.DragEnd, handler);
+
+    public Task<Listener> OnDragEnd(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.DragEnd, handler);
+
+    public Task<Listener> OnCooperativeGesturePrevented(Action<MapCooperativeGestureEvent> handler) =>
+        AddListener(MapEventNames.CooperativeGesturePrevented, handler);
+
+    public Task<Listener> OnCooperativeGesturePrevented(Func<MapCooperativeGestureEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.CooperativeGesturePrevented, handler);
+
+    public Task<Listener> OnProjectionTransition(Action<MapProjectionEvent> handler) =>
+        AddListener(MapEventNames.ProjectionTransition, handler);
+
+    public Task<Listener> OnProjectionTransition(Func<MapProjectionEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.ProjectionTransition, handler);
+
+    public Task<Listener> OnTerrain(Action<MapTerrainEvent> handler) =>
+        AddListener(MapEventNames.Terrain, handler);
+
+    public Task<Listener> OnTerrain(Func<MapTerrainEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Terrain, handler);
+
+    public Task<Listener> OnSourceDataAbort(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.SourceDataAbort, handler);
+
+    public Task<Listener> OnSourceDataAbort(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.SourceDataAbort, handler);
 
     public Task<Listener> OnStyleLoadListener(Action<MapEvent> handler) =>
         AddListener(MapEventNames.StyleLoad, handler);
 
     public Task<Listener> OnStyleLoadListener(Func<MapEvent, Task> handler) =>
         AddAsyncListener(MapEventNames.StyleLoad, handler);
+
+    public Task<Listener> OnContextMenu(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.ContextMenu, handler, layerId);
+
+    public Task<Listener> OnContextMenu(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.ContextMenu, handler, layerId);
+
+    public Task<Listener> OnDblClick(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.DblClick, handler, layerId);
+
+    public Task<Listener> OnDblClick(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.DblClick, handler, layerId);
+
+    public Task<Listener> OnMouseDown(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseDown, handler, layerId);
+
+    public Task<Listener> OnMouseDown(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseDown, handler, layerId);
+
+    public Task<Listener> OnMouseUp(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseUp, handler, layerId);
+
+    public Task<Listener> OnMouseUp(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseUp, handler, layerId);
+
+    public Task<Listener> OnMouseEnter(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseEnter, handler, layerId);
+
+    public Task<Listener> OnMouseEnter(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseEnter, handler, layerId);
+
+    public Task<Listener> OnMouseLeave(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseLeave, handler, layerId);
+
+    public Task<Listener> OnMouseLeave(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseLeave, handler, layerId);
+
+    public Task<Listener> OnMouseOver(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseOver, handler, layerId);
+
+    public Task<Listener> OnMouseOver(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseOver, handler, layerId);
+
+    public Task<Listener> OnMouseOut(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseOut, handler, layerId);
+
+    public Task<Listener> OnMouseOut(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseOut, handler, layerId);
+
+    public Task<Listener> OnMoveStart(Action<MapMoveEvent> handler) =>
+        AddListener(MapEventNames.MoveStart, handler);
+
+    public Task<Listener> OnMoveStart(Func<MapMoveEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.MoveStart, handler);
+
+    public Task<Listener> OnMove(Action<MapMoveEvent> handler) =>
+        AddListener(MapEventNames.Move, handler);
+
+    public Task<Listener> OnMove(Func<MapMoveEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Move, handler);
+
+    public Task<Listener> OnZoomStart(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.ZoomStart, handler);
+
+    public Task<Listener> OnZoomStart(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.ZoomStart, handler);
+
+    public Task<Listener> OnZoomEnd(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.ZoomEnd, handler);
+
+    public Task<Listener> OnZoomEnd(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.ZoomEnd, handler);
+
+    public Task<Listener> OnRotateStart(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.RotateStart, handler);
+
+    public Task<Listener> OnRotateStart(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.RotateStart, handler);
+
+    public Task<Listener> OnRotate(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Rotate, handler);
+
+    public Task<Listener> OnRotate(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Rotate, handler);
+
+    public Task<Listener> OnRotateEnd(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.RotateEnd, handler);
+
+    public Task<Listener> OnRotateEnd(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.RotateEnd, handler);
+
+    public Task<Listener> OnPitchStart(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.PitchStart, handler);
+
+    public Task<Listener> OnPitchStart(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.PitchStart, handler);
+
+    public Task<Listener> OnPitch(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Pitch, handler);
+
+    public Task<Listener> OnPitch(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Pitch, handler);
+
+    public Task<Listener> OnPitchEnd(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.PitchEnd, handler);
+
+    public Task<Listener> OnPitchEnd(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.PitchEnd, handler);
+
+    public Task<Listener> OnRollStart(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.RollStart, handler);
+
+    public Task<Listener> OnRollStart(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.RollStart, handler);
+
+    public Task<Listener> OnRoll(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Roll, handler);
+
+    public Task<Listener> OnRoll(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Roll, handler);
+
+    public Task<Listener> OnRollEnd(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.RollEnd, handler);
+
+    public Task<Listener> OnRollEnd(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.RollEnd, handler);
+
+    public Task<Listener> OnStyleData(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.StyleData, handler);
+
+    public Task<Listener> OnStyleData(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.StyleData, handler);
+
+    public Task<Listener> OnStyleDataLoading(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.StyleDataLoading, handler);
+
+    public Task<Listener> OnStyleDataLoading(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.StyleDataLoading, handler);
+
+    public Task<Listener> OnSourceDataLoading(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.SourceDataLoading, handler);
+
+    public Task<Listener> OnSourceDataLoading(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.SourceDataLoading, handler);
+
+    public Task<Listener> OnDataLoading(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.DataLoading, handler);
+
+    public Task<Listener> OnDataLoading(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.DataLoading, handler);
+
+    public Task<Listener> OnDataAbort(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.DataAbort, handler);
+
+    public Task<Listener> OnDataAbort(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.DataAbort, handler);
+
+    public Task<Listener> OnBoxZoomStart(Action<MapZoomEvent> handler) =>
+        AddListener(MapEventNames.BoxZoomStart, handler);
+
+    public Task<Listener> OnBoxZoomStart(Func<MapZoomEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.BoxZoomStart, handler);
+
+    public Task<Listener> OnBoxZoomEnd(Action<MapZoomEvent> handler) =>
+        AddListener(MapEventNames.BoxZoomEnd, handler);
+
+    public Task<Listener> OnBoxZoomEnd(Func<MapZoomEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.BoxZoomEnd, handler);
+
+    public Task<Listener> OnBoxZoomCancel(Action<MapZoomEvent> handler) =>
+        AddListener(MapEventNames.BoxZoomCancel, handler);
+
+    public Task<Listener> OnBoxZoomCancel(Func<MapZoomEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.BoxZoomCancel, handler);
+
+    public Task<Listener> OnWebGlContextLost(Action<MapContextEvent> handler) =>
+        AddListener(MapEventNames.WebGlContextLost, handler);
+
+    public Task<Listener> OnWebGlContextLost(Func<MapContextEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.WebGlContextLost, handler);
+
+    public Task<Listener> OnWebGlContextRestored(Action<MapContextEvent> handler) =>
+        AddListener(MapEventNames.WebGlContextRestored, handler);
+
+    public Task<Listener> OnWebGlContextRestored(Func<MapContextEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.WebGlContextRestored, handler);
+
+    public Task<Listener> OnResize(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Resize, handler);
+
+    public Task<Listener> OnResize(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Resize, handler);
+
+    public Task<Listener> OnRemove(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Remove, handler);
+
+    public Task<Listener> OnRemove(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Remove, handler);
     #endregion
 
     #region Methods
@@ -659,10 +982,10 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Sets or clears the map's geographical bounds.
     /// </summary>
-    /// <param name="bounds">The maximum bounds to set. If null or undefined is provided, the function removes the map's maximum bounds.</param>
+    /// <param name="bounds">The maximum bounds to set, or null to remove the map's maximum bounds.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     /// <see href="https://maplibre.org/maplibre-gl-js/docs/API/classes/Map/#setmaxbounds">setMaxBounds</see>
-    public async ValueTask SetMaxBounds(LngLatBounds bounds) =>
+    public async ValueTask SetMaxBounds(LngLatBounds? bounds) =>
         await _jsModule.InvokeVoidAsync("setMaxBounds", MapId, bounds);
 
     /// <summary>
@@ -806,8 +1129,8 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// </summary>
     /// <param name="layerId"></param>
     /// <returns></returns>
-    public async ValueTask<string> GetFilter(string layerId) =>
-        await _jsModule.InvokeAsync<string>("getFilter", MapId, layerId);
+    public async ValueTask<JsonElement?> GetFilter(string layerId) =>
+        await _jsModule.InvokeAsync<JsonElement?>("getFilter", MapId, layerId);
 
     /// <summary>
     /// Returns the value of the style's glyphs URL
@@ -832,6 +1155,20 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <returns></returns>
     public async ValueTask<object> GetLayer(string id) =>
         await _jsModule.InvokeAsync<object>("getLayer", MapId, id);
+
+    /// <summary>
+    /// Returns the layer with the specified ID deserialized to a typed <see cref="Layer"/> model.
+    /// </summary>
+    public async ValueTask<Layer?> GetLayerAsLayer(string id)
+    {
+        var json = await _jsModule.InvokeAsync<JsonElement?>("getLayer", MapId, id);
+        if (json is null || json.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<Layer>(json.Value.GetRawText(), MapLibreJsonSerializer.Options);
+    }
 
     /// <summary>
     /// Checks if a layer exists in the map's style by its ID.
@@ -952,12 +1289,32 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeAsync<ISource?>("getSource", MapId, id);
 
     /// <summary>
+    /// Returns the source with the specified ID deserialized to a typed <see cref="ISource"/> model.
+    /// </summary>
+    public async ValueTask<ISource?> GetSourceAsSource(string id)
+    {
+        var json = await _jsModule.InvokeAsync<JsonElement?>("getSource", MapId, id);
+        if (json is null || json.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<ISource>(json.Value.GetRawText(), MapLibreJsonSerializer.Options);
+    }
+
+    /// <summary>
     /// Checks if a source exists in the map's style by its ID.
     /// </summary>
     /// <param name="id">The ID of the source to check.</param>
     /// <returns>True if the source exists, false otherwise.</returns>
     public async ValueTask<bool> HasSource(string id) =>
         await _jsModule.InvokeAsync<bool>("hasSource", MapId, id);
+
+    /// <summary>
+    /// Returns the value of a global state property.
+    /// </summary>
+    public async ValueTask<object?> GetGlobalStateProperty(string propertyName) =>
+        await _jsModule.InvokeAsync<object?>("getGlobalStateProperty", MapId, propertyName);
 
     /// <summary>
     /// Retrieves the style's sprite as a list of objects.
@@ -974,6 +1331,12 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeAsync<object>("getStyle", MapId);
 
     /// <summary>
+    /// Retrieves the map's style specification as a <see cref="JsonElement"/>.
+    /// </summary>
+    public async ValueTask<JsonElement> GetStyleAsJsonElement() =>
+        await _jsModule.InvokeAsync<JsonElement>("getStyle", MapId);
+
+    /// <summary>
     /// Retrieves the terrain options if terrain is loaded.
     /// </summary>
     /// <returns>An object representing terrain options, or null if not loaded.</returns>
@@ -983,8 +1346,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Enables 3D terrain using a raster-dem source.
     /// </summary>
-    public async ValueTask SetTerrain(TerrainSpecification? terrain) =>
+    public async ValueTask SetTerrain(TerrainSpecification? terrain)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setTerrain", terrain);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setTerrain", MapId, terrain);
+    }
 
     /// <summary>
     /// Retrieves the sky configuration of the map style.
@@ -995,8 +1366,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Sets the sky configuration of the map style.
     /// </summary>
-    public async ValueTask SetSky(SkySpecification? sky) =>
+    public async ValueTask SetSky(SkySpecification? sky)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setSky", sky);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setSky", MapId, sky);
+    }
 
     /// <summary>
     /// Retrieves the light configuration of the map style.
@@ -1007,8 +1386,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Sets the light configuration of the map style.
     /// </summary>
-    public async ValueTask SetLight(LightSpecification? light) =>
+    public async ValueTask SetLight(LightSpecification? light)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setLight", light);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setLight", MapId, light);
+    }
 
     /// <summary>
     /// Overrides the map transform constraint callback at runtime (MapLibre 5.10+).
@@ -1023,9 +1410,30 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
+    /// Sets a callback to customize HTTP requests for map resources (tiles, glyphs, sprites, etc.).
+    /// Pass <c>null</c> to clear the callback.
+    /// </summary>
+    public async ValueTask SetTransformRequest(Func<TransformRequestInput, TransformRequestResult>? handler)
+    {
+        _transformRequestReference?.Dispose();
+        _transformRequestReference = handler is null
+            ? null
+            : DotNetObjectReference.Create(new TransformRequestCallbackHandler(handler));
+        await _jsModule.InvokeVoidAsync("setTransformRequest", MapId, _transformRequestReference);
+    }
+
+    /// <summary>
+    /// Sets the event parent to bubble events to another map instance, or clears the parent when <paramref name="parentMapId"/> is null.
+    /// </summary>
+    /// <param name="parentMapId">The <see cref="MapId"/> of the parent map, or null to clear.</param>
+    /// <param name="data">Optional data passed with bubbled events.</param>
+    public async ValueTask SetEventedParent(string? parentMapId, object? data = null) =>
+        await _jsModule.InvokeVoidAsync("setEventedParent", MapId, parentMapId, data);
+
+    /// <summary>
     /// Adds a custom layer backed by .NET render callbacks.
     /// </summary>
-    public async ValueTask AddCustomLayer(string layerId, CustomLayerOptions options, CustomLayerHandler handler)
+    public async ValueTask AddCustomLayer(string layerId, CustomLayerOptions options, CustomLayerHandler handler, string? beforeId = null)
     {
         ArgumentNullException.ThrowIfNull(handler);
 
@@ -1036,7 +1444,7 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
         var reference = DotNetObjectReference.Create(handler);
         _customLayerHandlers[layerId] = reference;
-        await _jsModule.InvokeVoidAsync("addCustomLayer", MapId, layerId, options, reference);
+        await _jsModule.InvokeVoidAsync("addCustomLayer", MapId, layerId, options, reference, beforeId);
     }
 
     /// <summary>
@@ -1171,8 +1579,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// </summary>
     /// <param name="id">The ID of the layer to move.</param>
     /// <param name="beforeId">The ID of the target layer to place the layer before.</param>
-    public async ValueTask MoveLayer(string id, string beforeId) =>
+  public async ValueTask MoveLayer(string id, string? beforeId = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("moveLayer", id, beforeId);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("moveLayer", MapId, id, beforeId);
+    }
 
     /// <summary>
     /// Pans the map by a specified offset.
@@ -1374,7 +1790,27 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
             _bulkTransaction.Add("removeLayer", id);
             return;
         }
+
+        if (_customLayerHandlers.TryRemove(id, out var handler))
+        {
+            handler.Dispose();
+        }
+
         await _jsModule.InvokeVoidAsync("removeLayer", MapId, id);
+    }
+
+    /// <summary>
+    /// Sets the zoom range of the specified style layer.
+    /// </summary>
+    public async ValueTask SetLayerZoomRange(string layerId, float minzoom, float maxzoom)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setLayerZoomRange", layerId, minzoom, maxzoom);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("setLayerZoomRange", MapId, layerId, minzoom, maxzoom);
     }
 
     /// <summary>
@@ -1484,8 +1920,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// </summary>
     /// <param name="feature">The feature identifier object.</param>
     /// <param name="state">The state properties to apply to the feature.</param>
-    public async ValueTask SetFeatureState(FeatureIdentifier feature, object state) =>
+    public async ValueTask SetFeatureState(FeatureIdentifier feature, object state)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setFeatureState", feature, state);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setFeatureState", MapId, feature, state);
+    }
 
     public async ValueTask SetGlobalStateProperty(string propertyName, object value) =>
         await _jsModule.InvokeVoidAsync("setGlobalStateProperty", MapId, propertyName, value);
@@ -1510,8 +1954,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <param name="options">
     /// Optional. An options object for configuring style setting behavior.
     /// </param>
-    public async ValueTask SetFilter(string layerId, object filter, StyleSetterOptions options) =>
+    public async ValueTask SetFilter(string layerId, object filter, StyleSetterOptions options)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setFilter", layerId, filter, options);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setFilter", MapId, layerId, filter, options);
+    }
 
     /// <summary>
     /// Sets the value of a layout property in the specified style layer.
@@ -1524,8 +1976,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// The value of the layout property. Must be of a type appropriate for the property, as defined in the MapLibre Style Specification.</param>
     /// <param name="options"></param>
     /// Optional. An options object for configuring style setting behavior.
-    public async ValueTask SetLayoutProperty(string layerId, string name, object value, StyleSetterOptions? options = null) =>
+    public async ValueTask SetLayoutProperty(string layerId, string name, object value, StyleSetterOptions? options = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setLayoutProperty", layerId, name, value, options);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setLayoutProperty", MapId, layerId, name, value, options);
+    }
 
     /// <summary>
     /// Sets the value of a paint property in the specified style layer.
@@ -1534,8 +1994,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <param name="name">The name of the paint property to set.</param>
     /// <param name="value">The value of the paint property.</param>
     /// <param name="options">Optional style setter options.</param>
-    public async ValueTask SetPaintProperty(string layerId, string name, object value, StyleSetterOptions? options = null) =>
+    public async ValueTask SetPaintProperty(string layerId, string name, object value, StyleSetterOptions? options = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setPaintProperty", layerId, name, value, options);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setPaintProperty", MapId, layerId, name, value, options);
+    }
 
     /// <summary>
     /// Sets the map's projection configuration, which determines how geographic coordinates are projected to the screen.
@@ -1544,8 +2012,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// The projection specification to apply. This can be a string (e.g., <c>"mercator"</c>),
     /// a dynamic expression (e.g., based on zoom), or a custom projection definition.
     /// </param>
-    public async ValueTask SetProjection(ProjectionSpecification projection) =>
+    public async ValueTask SetProjection(ProjectionSpecification projection)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setProjection", projection);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setProjection", MapId, projection);
+    }
 
     /// <summary>
     /// Sets a zoom level for the map.
@@ -1556,6 +2032,78 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeVoidAsync("setZoom", MapId, zoom, eventData);
 
     /// <summary>
+    /// Sets the map's pitch angle in degrees.
+    /// </summary>
+    public async ValueTask SetPitch(double pitch, object? eventData = null) =>
+        await _jsModule.InvokeVoidAsync("setPitch", MapId, pitch, eventData);
+
+    /// <summary>
+    /// Sets the map's roll angle in degrees.
+    /// </summary>
+    public async ValueTask SetRoll(double roll, object? eventData = null) =>
+        await _jsModule.InvokeVoidAsync("setRoll", MapId, roll, eventData);
+
+    /// <summary>
+    /// Sets the padding in pixels around the viewport.
+    /// </summary>
+    public async ValueTask SetPadding(PaddingOptions padding, object? eventData = null) =>
+        await _jsModule.InvokeVoidAsync("setPadding", MapId, padding, eventData);
+
+    /// <summary>
+    /// Sets the map's maximum zoom level.
+    /// </summary>
+    public async ValueTask SetMaxZoom(double maxZoom) =>
+        await _jsModule.InvokeVoidAsync("setMaxZoom", MapId, maxZoom);
+
+    /// <summary>
+    /// Sets the map's minimum zoom level.
+    /// </summary>
+    public async ValueTask SetMinZoom(double minZoom) =>
+        await _jsModule.InvokeVoidAsync("setMinZoom", MapId, minZoom);
+
+    /// <summary>
+    /// Sets the map's maximum pitch angle.
+    /// </summary>
+    public async ValueTask SetMaxPitch(double maxPitch) =>
+        await _jsModule.InvokeVoidAsync("setMaxPitch", MapId, maxPitch);
+
+    /// <summary>
+    /// Sets the map's minimum pitch angle.
+    /// </summary>
+    public async ValueTask SetMinPitch(double minPitch) =>
+        await _jsModule.InvokeVoidAsync("setMinPitch", MapId, minPitch);
+
+    /// <summary>
+    /// Sets whether multiple copies of the world are rendered side by side.
+    /// </summary>
+    public async ValueTask SetRenderWorldCopies(bool renderWorldCopies) =>
+        await _jsModule.InvokeVoidAsync("setRenderWorldCopies", MapId, renderWorldCopies);
+
+    /// <summary>
+    /// Sets the map's vertical field of view in degrees.
+    /// </summary>
+    public async ValueTask SetVerticalFieldOfView(double fov, object? eventData = null) =>
+        await _jsModule.InvokeVoidAsync("setVerticalFieldOfView", MapId, fov, eventData);
+
+    /// <summary>
+    /// Sets the map's glyph source URL.
+    /// </summary>
+    public async ValueTask SetGlyphs(string glyphsUrl, StyleSetterOptions? options = null) =>
+        await _jsModule.InvokeVoidAsync("setGlyphs", MapId, glyphsUrl, options);
+
+    /// <summary>
+    /// Snaps the map so that north is up when bearing is close enough to north.
+    /// </summary>
+    public async ValueTask SnapToNorth(AnimationOptions? options = null, object? eventData = null) =>
+        await _jsModule.InvokeVoidAsync("snapToNorth", MapId, options, eventData);
+
+    /// <summary>
+    /// Triggers rendering of a single frame. Useful with custom layers.
+    /// </summary>
+    public async ValueTask TriggerRepaint() =>
+        await _jsModule.InvokeVoidAsync("triggerRepaint", MapId);
+
+    /// <summary>
     /// Adjusts the map's style to a new configuration or URL.
     /// When <paramref name="options"/>.<see cref="SetStyleOptions.Diff"/> is <c>true</c> and
     /// <paramref name="style"/> is a JSON object, MapLibre diffs the style and emits <c>style.load</c>
@@ -1563,8 +2111,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// </summary>
     /// <param name="style">The style configuration object or URL.</param>
     /// <param name="options">Optional parameters for the style application.</param>
-    public async ValueTask SetStyle(object style, SetStyleOptions? options = null) =>
+    public async ValueTask SetStyle(object style, SetStyleOptions? options = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setStyle", style, options);
+            return;
+        }
+
         await _jsModule.InvokeVoidAsync("setStyle", MapId, style, options);
+    }
 
     /// <summary>
     /// Stops any animated transition currently underway on the map.

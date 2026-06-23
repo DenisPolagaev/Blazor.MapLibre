@@ -189,6 +189,14 @@ function geometryIntersectsBbox(geometry, bbox) {
 
 const customLayerHandlers = new Map();
 
+function createTransformRequestFn(dotnetReference) {
+    return (url, resourceType) => {
+        const payload = JSON.stringify({ url, resourceType });
+        const resultJson = dotnetReference.invokeMethod('Invoke', payload);
+        return JSON.parse(resultJson);
+    };
+}
+
 function createTransformConstrainFn(dotnetReference) {
     return (transform) => {
         const payload = JSON.stringify({
@@ -266,11 +274,38 @@ export function getMap(container) {
 }
 
 
-function createMapEventHandler(dotnetReference) {
+function createMapEventHandler(dotnetReference, throttleMs) {
+    let lastInvoke = 0;
+    let throttleTimer = null;
+    let pendingEvent = null;
+
     return function (e) {
         e.target = null;
         const result = JSON.stringify(e);
-        dotnetReference.invokeMethodAsync('Invoke', result).catch(console.error);
+
+        if (!throttleMs || throttleMs <= 0) {
+            dotnetReference.invokeMethodAsync('Invoke', result).catch(console.error);
+            return;
+        }
+
+        const now = Date.now();
+        if (now - lastInvoke >= throttleMs) {
+            lastInvoke = now;
+            dotnetReference.invokeMethodAsync('Invoke', result).catch(console.error);
+            return;
+        }
+
+        pendingEvent = result;
+        if (throttleTimer === null) {
+            throttleTimer = setTimeout(() => {
+                throttleTimer = null;
+                if (pendingEvent !== null) {
+                    lastInvoke = Date.now();
+                    dotnetReference.invokeMethodAsync('Invoke', pendingEvent).catch(console.error);
+                    pendingEvent = null;
+                }
+            }, throttleMs - (now - lastInvoke));
+        }
     };
 }
 
@@ -305,9 +340,9 @@ function detachMapListener(map, entry) {
  * @param {string | string[]} layerIds - Optional layer to pass when adding the event listener.
  * @returns {string} Listener id for use with off().
  */
-export function on(container, eventType, dotnetReference, layerIds) {
+export function on(container, eventType, dotnetReference, layerIds, throttleMs) {
     const map = mapInstances[container];
-    const handler = createMapEventHandler(dotnetReference);
+    const handler = createMapEventHandler(dotnetReference, throttleMs);
     attachMapListener(map, eventType, handler, layerIds);
     return registerListener(container, eventType, handler, layerIds);
 }
@@ -333,6 +368,23 @@ export function off(container, listenerId) {
 }
 
 /**
+ * Removes all registered listeners for a map container, optionally filtered by event type.
+ * @param {string} container - The map container identifier.
+ * @param {string} [eventType] - Optional event type filter.
+ */
+export function offAll(container, eventType) {
+    for (const [listenerId, entry] of Object.entries(listenerRegistry)) {
+        if (entry.container !== container) {
+            continue;
+        }
+        if (eventType && entry.eventType !== eventType) {
+            continue;
+        }
+        off(container, listenerId);
+    }
+}
+
+/**
  * Attaches a one-time event listener to a specified map instance.
  *
  * @param {string} container - The identifier for the specific map instance.
@@ -341,13 +393,12 @@ export function off(container, listenerId) {
  * @param {string | string[]} layerIds - Optional layer ids.
  * @returns {string} Listener id for use with off() before the event fires.
  */
-export function once(container, eventType, dotnetReference, layerIds) {
+export function once(container, eventType, dotnetReference, layerIds, throttleMs) {
     const map = mapInstances[container];
     const listenerId = crypto.randomUUID();
+    const baseHandler = createMapEventHandler(dotnetReference, throttleMs);
     const handler = function (e) {
-        e.target = null;
-        const result = JSON.stringify(e);
-        dotnetReference.invokeMethodAsync('Invoke', result).catch(console.error);
+        baseHandler(e);
         off(container, listenerId);
     };
 
@@ -438,7 +489,9 @@ export function addNavigationControl(container, options, position) {
  */
 export function addScaleControl(container, options, position) {
     const map = mapInstances[container];
-    console.log("addScaleControl position: " + position);
+    if (!map) {
+        return;
+    }
 
     const scaleControl = (options === undefined || options === null)
         ? new globalThis.maplibregl.ScaleControl()
@@ -868,6 +921,16 @@ export function getLayer(container, id) {
 }
 
 /**
+ * Checks whether a layer with the given id exists in the map style.
+ * @param {string} container - The map container identifier.
+ * @param {string} id - The layer id.
+ * @returns {boolean} True if the layer exists.
+ */
+export function hasLayer(container, id) {
+    return mapInstances[container].getLayer(id) != null;
+}
+
+/**
  * Retrieves the order of layers within a specific map container.
  *
  * @param {string} container - The identifier for the map container whose layer order is to be retrieved.
@@ -906,6 +969,15 @@ export function getLight(container) {
  */
 export function getMaxBounds(container) {
     return mapInstances[container].getMaxBounds();
+}
+
+/**
+ * Sets or clears the map's geographical bounds.
+ * @param {string} container - The map container identifier.
+ * @param {Object|null|undefined} bounds - LngLatBounds-like object, or null/undefined to clear.
+ */
+export function setMaxBounds(container, bounds) {
+    mapInstances[container].setMaxBounds(bounds ?? null);
 }
 
 /**
@@ -1027,6 +1099,26 @@ export function getSky(container) {
  */
 export function getSource(container, id) {
     return mapInstances[container].getSource(id);
+}
+
+/**
+ * Checks whether a source with the given id exists in the map style.
+ * @param {string} container - The map container identifier.
+ * @param {string} id - The source id.
+ * @returns {boolean} True if the source exists.
+ */
+export function hasSource(container, id) {
+    return mapInstances[container].getSource(id) != null;
+}
+
+/**
+ * Returns the value of a global state property.
+ * @param {string} container - The map container identifier.
+ * @param {string} propertyName - The global state property name.
+ * @returns {*} The property value.
+ */
+export function getGlobalStateProperty(container, propertyName) {
+    return mapInstances[container].getGlobalStateProperty(propertyName);
 }
 
 /**
@@ -1195,7 +1287,12 @@ export async function loadImage(container, url) {
  * @param {string} beforeId - The ID of the target layer to place the moved layer before.
  */
 export function moveLayer(container, id, beforeId) {
-    mapInstances[container].moveLayer(id, beforeId);
+    const map = mapInstances[container];
+    if (beforeId === undefined || beforeId === null) {
+        map.moveLayer(id);
+    } else {
+        map.moveLayer(id, beforeId);
+    }
 }
 
 /**
@@ -1448,7 +1545,8 @@ export function setCenterElevation(container, elevation, eventData) {
  * @param {Evented} parent - The parent Evented instance.
  * @param {any} [data] - Additional data.
  */
-export function setEventedParent(container, parent, data) {
+export function setEventedParent(container, parentContainer, data) {
+    const parent = parentContainer ? mapInstances[parentContainer] : null;
     mapInstances[container].setEventedParent(parent, data);
 }
 
@@ -1483,6 +1581,17 @@ export function setFilter(container, layerId, filter, options) {
     const map = mapInstances[container];
     if (!map.getLayer(layerId)) return;
     map.setFilter(layerId, filter, options);
+}
+
+/**
+ * Sets the zoom range for a layer.
+ * @param {string} container - The map container.
+ * @param {string} layerId - The layer id.
+ * @param {number} minzoom - Minimum zoom level.
+ * @param {number} maxzoom - Maximum zoom level.
+ */
+export function setLayerZoomRange(container, layerId, minzoom, maxzoom) {
+    mapInstances[container].setLayerZoomRange(layerId, minzoom, maxzoom);
 }
 
 /**
@@ -1526,7 +1635,7 @@ export function setTransformConstrain(container, dotnetReference) {
     mapInstances[container].transformConstrain = createTransformConstrainFn(dotnetReference);
 }
 
-export function addCustomLayer(container, layerId, options, dotnetReference) {
+export function addCustomLayer(container, layerId, options, dotnetReference, beforeId) {
     const map = mapInstances[container];
     customLayerHandlers.set(layerId, dotnetReference);
 
@@ -1534,19 +1643,33 @@ export function addCustomLayer(container, layerId, options, dotnetReference) {
         id: layerId,
         type: 'custom',
         renderingMode: options?.renderingMode ?? '2d',
-        onAdd() {
-            dotnetReference.invokeMethodAsync('OnAdd').catch(console.error);
+        onAdd(mapInstance, gl) {
+            dotnetReference.invokeMethodAsync('OnAdd', !!gl).catch(console.error);
         },
         onRemove() {
             dotnetReference.invokeMethodAsync('OnRemove').catch(console.error);
             customLayerHandlers.delete(layerId);
         },
-        render() {
-            dotnetReference.invokeMethodAsync('OnRender').catch(console.error);
+        prerender(gl, matrix) {
+            dotnetReference.invokeMethodAsync('OnPrerender', Array.from(matrix)).catch(console.error);
+        },
+        render(gl, matrix) {
+            dotnetReference.invokeMethodAsync('OnRender', Array.from(matrix)).catch(console.error);
         },
     };
 
-    map.addLayer(layer);
+    if (options?.minzoom !== undefined && options?.minzoom !== null) {
+        layer.minzoom = options.minzoom;
+    }
+    if (options?.maxzoom !== undefined && options?.maxzoom !== null) {
+        layer.maxzoom = options.maxzoom;
+    }
+
+    if (beforeId === undefined || beforeId === null) {
+        map.addLayer(layer);
+    } else {
+        map.addLayer(layer, beforeId);
+    }
 }
 
 export function timeControlSetNow(timestamp) {
@@ -1562,12 +1685,18 @@ export function timeControlIsFrozen() {
 }
 
 /**
- * Updates the requestManager's transform request with a new function.
+ * Updates the requestManager's transform request with a .NET callback.
  * @param {string} container - The map container.
- * @param {Function} transformRequest - Callback to modify requests.
+ * @param {Object|null} dotnetReference - .NET reference for the transform request callback, or null to clear.
  */
-export function setTransformRequest(container, transformRequest) {
-    mapInstances[container].setTransformRequest(transformRequest);
+export function setTransformRequest(container, dotnetReference) {
+    const map = mapInstances[container];
+    if (!dotnetReference) {
+        map.setTransformRequest(null);
+        return;
+    }
+
+    map.setTransformRequest(createTransformRequestFn(dotnetReference));
 }
 
 /**
@@ -1597,6 +1726,38 @@ export function setProjection(container, projection) {
  */
 export function setZoom(container, zoom, eventData) {
     mapInstances[container].setZoom(zoom, eventData);
+}
+
+export function setPitch(container, pitch, eventData) {
+    mapInstances[container].setPitch(pitch, eventData);
+}
+
+export function setRoll(container, roll, eventData) {
+    mapInstances[container].setRoll(roll, eventData);
+}
+
+export function setPadding(container, padding, eventData) {
+    mapInstances[container].setPadding(padding, eventData);
+}
+
+export function setMaxZoom(container, maxZoom) {
+    mapInstances[container].setMaxZoom(maxZoom);
+}
+
+export function setMinZoom(container, minZoom) {
+    mapInstances[container].setMinZoom(minZoom);
+}
+
+export function setMaxPitch(container, maxPitch) {
+    mapInstances[container].setMaxPitch(maxPitch);
+}
+
+export function setMinPitch(container, minPitch) {
+    mapInstances[container].setMinPitch(minPitch);
+}
+
+export function setRenderWorldCopies(container, renderWorldCopies) {
+    mapInstances[container].setRenderWorldCopies(renderWorldCopies);
 }
 
 /**
@@ -1765,6 +1926,15 @@ export async function executeTransaction(container, data) {
             case "addControl":
                 addControl(container, d.data[0], d.data[1]);
                 break;
+            case "addGeolocateControl":
+                addGeolocateControl(container, d.data[0], d.data[1]);
+                break;
+            case "addNavigationControl":
+                addNavigationControl(container, d.data[0], d.data[1]);
+                break;
+            case "addScaleControl":
+                addScaleControl(container, d.data[0], d.data[1]);
+                break;
             case "addImage":
                 await addImage(container, d.data[0], d.data[1], d.data[2]);
                 break;
@@ -1803,6 +1973,39 @@ export async function executeTransaction(container, data) {
                 break;
             case "updateSourceData":
                 updateSourceData(container, d.data[0], d.data[1], d.data[2] ?? false);
+                break;
+            case "moveLayer":
+                moveLayer(container, d.data[0], d.data[1]);
+                break;
+            case "setFilter":
+                setFilter(container, d.data[0], d.data[1], d.data[2]);
+                break;
+            case "setLayoutProperty":
+                setLayoutProperty(container, d.data[0], d.data[1], d.data[2], d.data[3]);
+                break;
+            case "setPaintProperty":
+                setPaintProperty(container, d.data[0], d.data[1], d.data[2], d.data[3]);
+                break;
+            case "setLayerZoomRange":
+                setLayerZoomRange(container, d.data[0], d.data[1], d.data[2]);
+                break;
+            case "setFeatureState":
+                setFeatureState(container, d.data[0], d.data[1]);
+                break;
+            case "setTerrain":
+                setTerrain(container, d.data[0]);
+                break;
+            case "setSky":
+                setSky(container, d.data[0]);
+                break;
+            case "setLight":
+                setLight(container, d.data[0]);
+                break;
+            case "setProjection":
+                setProjection(container, d.data[0]);
+                break;
+            case "setStyle":
+                setStyle(container, d.data[0], d.data[1]);
                 break;
             default:
                 console.warn(`Unknown transaction event: ${d.event}`);

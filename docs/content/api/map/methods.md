@@ -4,7 +4,8 @@ The `MapLibre` component wraps MapLibre GL JS 5.17. Key methods added in recent 
 
 ## Style and terrain
 
-- `SetStyle(style, SetStyleOptions?)` — pass `{ Diff = true }` for incremental style updates (`style.load` fires).
+- `SetStyle(style, SetStyleOptions?)` — pass `{ Diff = true }` for incremental style updates (`style.load` fires); supports bulk transactions
+- `GetStyleAsJsonElement()` — typed style read
 - `SetTerrain(TerrainSpecification?)`, `SetSky`, `SetLight`
 - `SetPaintProperty`, `SetLayoutProperty`, `SetGlobalStateProperty`
 
@@ -15,15 +16,26 @@ The `MapLibre` component wraps MapLibre GL JS 5.17. Key methods added in recent 
 ## Camera and time
 
 - `SetTransformConstrain` / `TransformConstrain` parameter on the component
+- `SetTransformRequest` — customize tile/glyph/sprite HTTP requests from C#
+- `SetEventedParent` — bubble events to another map by its `MapId`
 - `TimeControlSetNow`, `TimeControlRestoreNow`, `TimeControlIsFrozen`
 
 ## Query
 
 - `QueryRenderedLayerFeatures` — typed `LayerFeatureFeature[]` with `layer` metadata
 
+## Layers
+
+- `HasLayer`, `HasSource`, `GetLayerAsLayer`, `GetSourceAsSource`
+- `SetLayerZoomRange`, `MoveLayer(id, beforeId?)`
+- `GetFilter` — returns `JsonElement?`; `GetGlobalStateProperty`
+- `SetPitch`, `SetRoll`, `SetPadding`, `SetMaxBounds(LngLatBounds?)`, `SetMaxZoom`, `SetMinZoom`, `SetMaxPitch`, `SetMinPitch`, `SetRenderWorldCopies`, `SetVerticalFieldOfView`
+- `SetGlyphs`, `SnapToNorth`, `TriggerRepaint`
+- `slot` on base `Layer`; `CustomLayer` style model
+
 ## Custom layers
 
-- `AddCustomLayer(layerId, CustomLayerOptions, CustomLayerHandler)`
+- `AddCustomLayer(layerId, CustomLayerOptions, CustomLayerHandler, beforeId?)` — supports `minzoom`/`maxzoom`, matrix in `OnRender`/`OnPrerender`
 
 ## Container
 
@@ -35,8 +47,10 @@ The `MapLibre` component wraps MapLibre GL JS 5.17. Key methods added in recent 
 
 ## Events
 
-- `AddListener<T>`, `AddOnceListener<T>` — generic subscriptions; returns `Listener` with working `Remove()`.
-- Convenience: `OnClick`, `OnMoveEnd`, `OnIdle`, `OnMouseMove`, `OnData`, `OnSourceData`, `OnError`, `OnTouchStart`, `OnTouchEnd`, `OnZoomChange`, `OnStyleLoadListener`.
+- `AddListener<T>`, `AddOnceListener<T>` — generic subscriptions; optional `throttleMs` for high-frequency events; returns `Listener` with working `Remove()`.
+- `RemoveAllListeners(eventName?)` — detach all listeners on this map.
+- Convenience: `OnClick`, `OnContextMenu`, `OnDblClick`, `OnMouseDown`/`OnMouseUp`/`OnMouseEnter`/`OnMouseLeave`, `OnMoveStart`/`OnMove`/`OnMoveEnd`, camera `OnRotate*`/`OnPitch*`/`OnRoll*`, `OnBoxZoom*`, `OnWebGlContext*`, `OnWheel`, `OnRender`, …
+- `MapEvent.GetOriginalDomEvent()` for typed DOM fields from `originalEvent`
 - Use `MapEventNames` for event name constants.
 
 See [Event listeners](../events/listeners.md) and [Layers overview](../layers/index.md).

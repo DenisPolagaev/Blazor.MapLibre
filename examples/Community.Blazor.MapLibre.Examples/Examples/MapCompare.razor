@@ -238,7 +238,10 @@
             $"#{_containerId}",
             new CompareOptions(MouseMove: _mouseMove));
 
-        _slideEndListener?.Dispose();
+        if (_slideEndListener is not null)
+        {
+            await _slideEndListener.DisposeAsync();
+        }
         _slideEndListener = await _compare.AddSlideEndListener<SlideEndEvent>(OnSlideEnd);
         _sliderPosition = await _compare.GetCurrentPositionAsync();
         _compareCreated = true;
@@ -253,7 +256,10 @@
 
     public async ValueTask DisposeAsync()
     {
-        _slideEndListener?.Dispose();
+        if (_slideEndListener is not null)
+        {
+            await _slideEndListener.DisposeAsync();
+        }
         await _compare.DisposeAsync();
     }
 }
