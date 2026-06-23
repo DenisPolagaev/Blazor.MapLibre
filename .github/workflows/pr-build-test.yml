@@ -17,6 +17,8 @@ jobs:
           - docs/Community.Blazor.MapLibre.Documentation.csproj
           - examples/Community.Blazor.MapLibre.Examples/Community.Blazor.MapLibre.Examples.csproj
           - examples/Community.Blazor.MapLibre.Examples.MapboxGlPlugin/Community.Blazor.MapLibre.Examples.MapboxGlPlugin.csproj
+          - src/plugins/Community.Blazor.MapLibre.TerraDrawPlugin/Community.Blazor.MapLibre.TerraDrawPlugin.csproj
+          - src/plugins/Community.Blazor.MapLibre.ComparePlugin/Community.Blazor.MapLibre.ComparePlugin.csproj
 
     steps:
       - name: Checkout repository

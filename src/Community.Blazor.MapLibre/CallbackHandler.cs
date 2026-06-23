@@ -72,8 +72,16 @@ public class CallbackHandler
             return;
         }
 
-        // Deserialize arguments into the expected type.
-        var deserializedArgs = JsonSerializer.Deserialize(args, _argumentType, Serializer);
+        object? deserializedArgs;
+        if (_argumentType == typeof(string))
+        {
+            // JS passes JSON.stringify(payload); for string handlers the payload is already the final value.
+            deserializedArgs = args;
+        }
+        else
+        {
+            deserializedArgs = JsonSerializer.Deserialize(args, _argumentType, Serializer);
+        }
 
         // Invoke delegate with deserialized arguments.
         var returnObjectWithArgs = _callbackDelegate.DynamicInvoke(deserializedArgs);

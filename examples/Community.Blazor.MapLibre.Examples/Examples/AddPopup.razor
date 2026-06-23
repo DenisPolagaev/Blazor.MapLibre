@@ -13,20 +13,15 @@
 
 @code
 {
-    private MapLibre? _map { get; set; }
+    private MapLibre _map = new();
     
     private readonly MapOptions _mapOptions = new()
     {
-        Style = "https://demotiles.maplibre.org/style.json"
+        Style = ExampleMapStyles.OpenStreetMap
     };
 
     private async Task OnMapLoad(EventArgs args)
     {
-        if (_map is null)
-        {
-            return;
-        }
-
         await _map.OnClick(null, AddPopup);
 
         async Task AddPopup(MapMouseEvent evnt)

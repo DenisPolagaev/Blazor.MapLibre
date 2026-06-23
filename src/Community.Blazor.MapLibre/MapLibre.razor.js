@@ -3,7 +3,24 @@ import splitGeoJSON from './geojson-antimeridian-cut/cut.js'
 const mapInstances = {};
 const optionsInstances = {};
 const markerInstances = {};
+const currentLocationMarkerInstances = {};
+const scaleControlInstances = {};
 
+/**
+ * Ensures maplibre-gl is on globalThis before creating maps.
+ * Does not load any plugins.
+ */
+export async function prepareMapLibreGl() {
+    if (globalThis.maplibregl?.Map) {
+        return;
+    }
+
+    await import('./maplibre-gl/dist/maplibre-gl.js');
+
+    if (!globalThis.maplibregl?.Map) {
+        throw new Error('MapLibre GL JS is not available on globalThis.maplibregl');
+    }
+}
 /**
  * Cuts the GeoJSON source at the antimeridian if the option is enabled.
  *
@@ -19,6 +36,156 @@ function cutAntiMeridian(container, data) {
     return splitGeoJSON(data);
 }
 
+function lngLatBboxFromCorners(upperLeft, bottomRight) {
+    return {
+        minLng: Math.min(upperLeft.lng, bottomRight.lng),
+        maxLng: Math.max(upperLeft.lng, bottomRight.lng),
+        minLat: Math.min(upperLeft.lat, bottomRight.lat),
+        maxLat: Math.max(upperLeft.lat, bottomRight.lat),
+    };
+}
+
+function pointInBbox(lng, lat, bbox) {
+    return lng >= bbox.minLng && lng <= bbox.maxLng &&
+        lat >= bbox.minLat && lat <= bbox.maxLat;
+}
+
+function pointInRing(lng, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (((yi > lat) !== (yj > lat)) &&
+            (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+function pointInPolygonCoords(lng, lat, coordinates) {
+    if (!pointInRing(lng, lat, coordinates[0])) {
+        return false;
+    }
+    for (let h = 1; h < coordinates.length; h++) {
+        if (pointInRing(lng, lat, coordinates[h])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function segmentsIntersect(a1, a2, b1, b2) {
+    function cross(o, a, b) {
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    }
+
+    const d1 = cross(b1, b2, a1);
+    const d2 = cross(b1, b2, a2);
+    const d3 = cross(a1, a2, b1);
+    const d4 = cross(a1, a2, b2);
+
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+function lineIntersectsBbox(line, bbox) {
+    for (const [lng, lat] of line) {
+        if (pointInBbox(lng, lat, bbox)) {
+            return true;
+        }
+    }
+
+    const bboxRing = [
+        [bbox.minLng, bbox.minLat],
+        [bbox.maxLng, bbox.minLat],
+        [bbox.maxLng, bbox.maxLat],
+        [bbox.minLng, bbox.maxLat],
+    ];
+
+    for (let i = 0; i < line.length - 1; i++) {
+        const a = line[i];
+        const b = line[i + 1];
+        for (let j = 0; j < 4; j++) {
+            if (segmentsIntersect(a, b, bboxRing[j], bboxRing[(j + 1) % 4])) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function polygonIntersectsBbox(coordinates, bbox) {
+    for (const ring of coordinates) {
+        for (const [lng, lat] of ring) {
+            if (pointInBbox(lng, lat, bbox)) {
+                return true;
+            }
+        }
+    }
+
+    const samplePoints = [
+        [bbox.minLng, bbox.minLat],
+        [bbox.maxLng, bbox.minLat],
+        [bbox.maxLng, bbox.maxLat],
+        [bbox.minLng, bbox.maxLat],
+        [(bbox.minLng + bbox.maxLng) / 2, (bbox.minLat + bbox.maxLat) / 2],
+    ];
+
+    for (const [lng, lat] of samplePoints) {
+        if (pointInPolygonCoords(lng, lat, coordinates)) {
+            return true;
+        }
+    }
+
+    const bboxRing = [
+        [bbox.minLng, bbox.minLat],
+        [bbox.maxLng, bbox.minLat],
+        [bbox.maxLng, bbox.maxLat],
+        [bbox.minLng, bbox.maxLat],
+    ];
+
+    for (const ring of coordinates) {
+        for (let i = 0; i < ring.length - 1; i++) {
+            const a = ring[i];
+            const b = ring[i + 1];
+            for (let j = 0; j < 4; j++) {
+                if (segmentsIntersect(a, b, bboxRing[j], bboxRing[(j + 1) % 4])) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+function geometryIntersectsBbox(geometry, bbox) {
+    if (!geometry) {
+        return false;
+    }
+
+    switch (geometry.type) {
+        case 'Point':
+            return pointInBbox(geometry.coordinates[0], geometry.coordinates[1], bbox);
+        case 'MultiPoint':
+            return geometry.coordinates.some(([lng, lat]) => pointInBbox(lng, lat, bbox));
+        case 'LineString':
+            return lineIntersectsBbox(geometry.coordinates, bbox);
+        case 'MultiLineString':
+            return geometry.coordinates.some(line => lineIntersectsBbox(line, bbox));
+        case 'Polygon':
+            return polygonIntersectsBbox(geometry.coordinates, bbox);
+        case 'MultiPolygon':
+            return geometry.coordinates.some(polygon => polygonIntersectsBbox(polygon, bbox));
+        case 'GeometryCollection':
+            return geometry.geometries.some(g => geometryIntersectsBbox(g, bbox));
+        default:
+            return true;
+    }
+}
+
 /**
  * Initializes a MapLibre map instance with the given options and connects it to a .NET reference for interop functionality.
  *
@@ -26,21 +193,31 @@ function cutAntiMeridian(container, data) {
  * @param {Object} dotnetReference - A .NET instance reference for invoking interop methods.
  */
 export function initializeMap(options, dotnetReference) {
-    const map = new maplibregl.Map(options);
+    const map = new globalThis.maplibregl.Map(options);
 
     optionsInstances[options.container] = options;
     mapInstances[options.container] = map;
 
     map.on('style.load', () => {
-        dotnetReference.invokeMethodAsync("OnStyleLoadCallback")
+        dotnetReference.invokeMethodAsync("OnStyleLoadCallback").catch(console.error);
     });
 
-    map.on('load', function () {
-        dotnetReference.invokeMethodAsync("OnLoadCallback")
+    map.on('load', () => {
+        dotnetReference.invokeMethodAsync("OnLoadCallback").catch(console.error);
     });
-    
+
     return map;
 }
+
+/**
+ * Returns the MapLibre map instance for the given container id.
+ *
+ * @param {string} container - The map container element id.
+ */
+export function getMap(container) {
+    return mapInstances[container];
+}
+
 
 /**
  * Attaches an event listener to a specified map instance.
@@ -80,22 +257,89 @@ export function on(container, eventType, dotnetReference, layerIds) {
 export function addControl(container, controlType, position) {
     const map = mapInstances[container];
     const controlsMap = {
-        AttributionControl: maplibregl.AttributionControl,
-        FullscreenControl: maplibregl.FullscreenControl,
-        GeolocateControl: maplibregl.GeolocateControl,
-        GlobeControl: maplibregl.GlobeControl,
-        LogoControl: maplibregl.LogoControl,
-        NavigationControl: maplibregl.NavigationControl,
-        ScaleControl: maplibregl.ScaleControl,
-        TerrainControl: maplibregl.TerrainControl
+        AttributionControl: globalThis.maplibregl.AttributionControl,
+        FullscreenControl: globalThis.maplibregl.FullscreenControl,
+        GeolocateControl: globalThis.maplibregl.GeolocateControl,
+        GlobeControl: globalThis.maplibregl.GlobeControl,
+        LogoControl: globalThis.maplibregl.LogoControl,
+        NavigationControl: globalThis.maplibregl.NavigationControl,
+        ScaleControl: globalThis.maplibregl.ScaleControl,
+        TerrainControl: globalThis.maplibregl.TerrainControl
     };
 
     const ControlClass = controlsMap[controlType];
     if (ControlClass) {
-        const control = new ControlClass();
-        map.addControl(control, position);
+        const control = new ControlClass(position);
+        map.addControl(control);
     } else {
         console.warn(`Control type '${controlType}' is not supported.`);
+    }
+}
+
+/**
+ * Adds a geolocate control to the given map container.
+ *
+ * @param {string} container - The identifier of the map container.
+ * @param {Object} options - Configuration settings for the Geolocate Control.
+ * @param {string} position - position on the map to which the control will be added. Valid values are 'top-left', 'top-right', 'bottom-left', and 'bottom-right'. Defaults to 'top-right'.
+ */
+export function addGeolocateControl(container, options, position) {
+    const map = mapInstances[container];
+
+    if (options === undefined || options === null) {
+        map.addControl(new globalThis.maplibregl.GeolocateControl(), position || undefined);
+    } else {
+        map.addControl(new globalThis.maplibregl.GeolocateControl(options), position || undefined);
+    }
+}
+
+/**
+ * Adds a navigation control to the given map container.
+ *
+ * @param {string} container - The identifier of the map container.
+ * @param {Object} options - Configuration settings for the Navigation Control.
+ * @param {string} position - position on the map to which the control will be added. Valid values are 'top-left', 'top-right', 'bottom-left', and 'bottom-right'. Defaults to 'top-right'.
+ */
+export function addNavigationControl(container, options, position) {
+    const map = mapInstances[container];
+
+    if (options === undefined || options === null) {
+        map.addControl(new globalThis.maplibregl.NavigationControl(), position || undefined);
+    } else {
+        map.addControl(new globalThis.maplibregl.NavigationControl(options), position || undefined);
+    }
+}
+
+
+/**
+ * Adds a scale control to the given map container.
+ *
+ * @param {string} container - The identifier of the map container.
+ * @param {Object} options - Configuration settings for the Scale Control.
+ * @param {string} position - position on the map to which the control will be added. Valid values are 'top-left', 'top-right', 'bottom-left', and 'bottom-right'. Defaults to 'top-right'.
+ */
+export function addScaleControl(container, options, position) {
+    const map = mapInstances[container];
+    console.log("addScaleControl position: " + position);
+
+    const scaleControl = (options === undefined || options === null)
+        ? new globalThis.maplibregl.ScaleControl()
+        : new globalThis.maplibregl.ScaleControl(options);
+
+    map.addControl(scaleControl, position || undefined);
+    scaleControlInstances[container] = scaleControl;
+}
+
+/**
+ * Updates the unit of the scale control for the given map container.
+ *
+ * @param {string} container - The identifier of the map container.
+ * @param {string} unit - The unit to set ("metric", "imperial", or "nautical").
+ */
+export function setScaleControlUnit(container, unit) {
+    const scaleControl = scaleControlInstances[container];
+    if (scaleControl) {
+        scaleControl.setUnit(unit);
     }
 }
 
@@ -147,6 +391,7 @@ export function addSource(container, id, source) {
     mapInstances[container].addSource(id, source);
 }
 
+
 /**
  * Updates the data of a specific GeoJSON source
  *
@@ -161,6 +406,34 @@ export function setSourceData(container, id, data) {
         throw new Error(`Could not find source with id ${id}`);
     }
     source.setData(data);
+}
+
+/**
+ * Updates the data of a specific GeoJSON source
+ *
+ * @param {string} container - The identifier for the map container instance.
+ * @param {string} id - The unique identifier for the source you wish to update.
+ * @param {string} data - The GeoJSON data you wish to apply to the source
+ */
+    export function setSourceDataAsJson(container, id, data) {
+    let jsonData = JSON.parse(data);
+    jsonData = cutAntiMeridian(container, jsonData);
+    const source = mapInstances[container].getSource(id);
+    if (source === undefined) {
+        throw new Error(`Could not find source with id ${id}`);
+    }
+    source.setData(jsonData);
+}
+
+/**
+ * Shows the tile boundaries for debug purposes.
+ *
+ * @param {string} container - The identifier for the map container instance.
+ * @param {boolean} shouldShowTileBoundaries
+ */
+export function showTileBoundaries(container, shouldShowTileBoundaries) {
+    const map = mapInstances[container];
+    map.showTileBoundaries = shouldShowTileBoundaries;
 }
 
 /**
@@ -256,19 +529,6 @@ export function fitBounds(container, bounds, options, eventData) {
         [bounds._sw.lng, bounds._sw.lat], // Southwest corner
         [bounds._ne.lng, bounds._ne.lat]  // Northeast corner
     ], options, eventData);
-}
-
-/**
- * Sets or clears the map's geographical bounds.
- *
- * @param {string} container - The identifier for the map container that needs to fit the bounds.
- * @param {Object} bounds - The maximum bounds to set. If null or undefined is provided, the function removes the map's maximum bounds.
- */
-export function setMaxBounds(container, bounds) {
-    mapInstances[container].setMaxBounds([
-        [bounds._sw.lng, bounds._sw.lat], // Southwest corner
-        [bounds._ne.lng, bounds._ne.lat]  // Northeast corner
-    ]);
 }
 
 /**
@@ -399,7 +659,7 @@ export function getCenterElevation(container) {
  * @param {string} container - The identifier for the desired container.
  * @returns {*} The container instance associated with the specified container identifier.
  */
-export function getContainer(container) {
+export function etContainer(container) {
     return mapInstances[container].getContainer();
 }
 
@@ -458,16 +718,6 @@ export function getLayer(container, id) {
 }
 
 /**
- * Checks if a layer exists in the map's style by its ID.
- * @param {string} container - The identifier of the map container.
- * @param {string} id - The ID of the layer to check.
- * @returns {boolean} True if the layer exists, false otherwise.
- */
-export function hasLayer(container, id) {
-    return !!mapInstances[container]?.getLayer(id);
-}
-
-/**
  * Retrieves the order of layers within a specific map container.
  *
  * @param {string} container - The identifier for the map container whose layer order is to be retrieved.
@@ -475,16 +725,6 @@ export function hasLayer(container, id) {
  */
 export function getLayersOrder(container) {
     return mapInstances[container].getLayersOrder();
-}
-
-/**
- * Checks if a layer exists in the map's style by its ID.
- * @param {string} container - The identifier of the map container.
- * @param {string} id - The ID of the layer to check.
- * @returns {boolean} True if the layer exists, false otherwise.
- */
-export function hasLayer(container, id) {
-    return !!mapInstances[container]?.getLayer(id);
 }
 
 /**
@@ -637,16 +877,6 @@ export function getSky(container) {
  */
 export function getSource(container, id) {
     return mapInstances[container].getSource(id);
-}
-
-/**
- * Checks if a source exists in the map's style by its ID.
- * @param {string} container - The identifier of the map container.
- * @param {string} id - The ID of the source to check.
- * @returns {boolean} True if the source exists, false otherwise.
- */
-export function hasSource(container, id) {
-    return !!mapInstances[container]?.getSource(id);
 }
 
 /**
@@ -861,6 +1091,22 @@ export function queryRenderedFeatures(container, query, options) {
     return mapInstances[container].queryRenderedFeatures(query, options);
 }
 
+export function queryRenderedFeaturesWithoutGeometriesReturned(container, query, options) {
+    const upperLeft = mapInstances[container].unproject([query[0][0], query[0][1]]);
+    const bottomRight = mapInstances[container].unproject([query[1][0], query[1][1]]);
+    const bbox = lngLatBboxFromCorners(upperLeft, bottomRight);
+    const features = mapInstances[container].queryRenderedFeatures(query, options);
+
+    const intersectingFeatures = features.filter(feature =>
+        geometryIntersectsBbox(feature.geometry, bbox)
+    );
+
+    for (const feature of intersectingFeatures) {
+        feature.geometry = null;
+    }
+    return intersectingFeatures;
+}
+
 /**
  * Queries features from a source.
  * @param {string} container - The map container.
@@ -902,8 +1148,8 @@ export function remove(container) {
     if (optionsInstances[container]) {
         delete optionsInstances[container];
     }
-    if (markerInstances[container]) {
-        delete markerInstances[container];
+    if (currentLocationMarkerInstances[container]) {
+        delete currentLocationMarkerInstances[container];
     }
 }
 
@@ -1063,6 +1309,16 @@ export function setFeatureState(container, feature, state) {
 }
 
 /**
+ * Sets a global state property.
+ * @param {string} container - The map container.
+ * @param {Object} propertyName - The name of the state property to set.
+ * @param {Object} value - The value of the state property to set.
+ */
+export function setGlobalStateProperty(container, propertyName, value) {
+    mapInstances[container].setGlobalStateProperty(propertyName, value);
+}
+
+/**
  * Sets a filter for a specified layer.
  * @param {string} container - The map container.
  * @param {string} layerId - The layer ID.
@@ -1070,7 +1326,9 @@ export function setFeatureState(container, feature, state) {
  * @param {object} [options] - Filter options.
  */
 export function setFilter(container, layerId, filter, options) {
-    mapInstances[container].setFilter(layerId, filter, options);
+    const map = mapInstances[container];
+    if (!map.getLayer(layerId)) return;
+    map.setFilter(layerId, filter, options);
 }
 
 /**
@@ -1081,18 +1339,6 @@ export function setFilter(container, layerId, filter, options) {
  */
 export function setGlyphs(container, glyphsUrl, options) {
     mapInstances[container].setGlyphs(glyphsUrl, options);
-}
-
-/**
- * Sets the value of a layout property in the specified style layer.
- * @param {string} container - The map container.
- * @param {string} layerId - The layer ID.
- * @param {string} name - The name of the layout property to set.
- * @param {object} [value] - The value of the layout property.
- * @param {object} [options] - Options object.
- */
-export function setLayoutProperty(container, layerId, name, value, options) {
-    mapInstances[container].setLayoutProperty(layerId, name, value, options);
 }
 
 /**
@@ -1153,7 +1399,7 @@ export function setZoom(container, zoom, eventData) {
 }
 
 /**
- * Snaps the map so that north (0° bearing) is up, if the current bearing is close enough.
+ * Snaps the map so that north (0? bearing) is up, if the current bearing is close enough.
  * @param {string} container - The map container.
  * @param {object} [options] - Animation options.
  * @param {any} [eventData] - Additional event data.
@@ -1231,52 +1477,78 @@ export function zoomTo(container, zoom, options, eventData) {
 }
 
 export function createPopup(container, settings, options) {
-    new maplibregl.Popup(options)
+    new globalThis.maplibregl.Popup(options)
         .setLngLat([settings.lngLat.lng, settings.lngLat.lat])
         .setHTML(settings.content)
         .addTo(mapInstances[container]);
 }
 
 export function createMarker(container, markerId, options, position) {
-    markerInstances[markerId] = new maplibregl.Marker(options)
+    const elementId = options.elementId;
+    if (elementId) {
+        options.element = document.getElementById(elementId);
+    }
+
+    markerInstances[markerId] = new globalThis.maplibregl.Marker(options)
         .setLngLat([position.lng, position.lat])
         .addTo(mapInstances[container]);
-    
+
     if (options.extensions) {
         const extensions = options.extensions;
-        
-        if (extensions.htmlContent.length > 0) {
+
+        if (extensions.htmlContent?.length > 0) {
             markerInstances[markerId].getElement().innerHTML = extensions.htmlContent;
         }
-        
-        if (extensions.popupHtmlContent.length > 0) {
+
+        if (extensions.popupHtmlContent?.length > 0) {
             markerInstances[markerId].setPopup(
-                new maplibregl.Popup({ offset: 25 })
+                new globalThis.maplibregl.Popup({ offset: 25 })
                     .setHTML(extensions.popupHtmlContent)
             );
         }
     }
 }
 
-/**
- * Removes a marker by its ID.
- * @param {string} markerId - The marker ID.
- */
-export function removeMarker(markerId){
+export function removeMarker(markerId) {
     const marker = markerInstances[markerId];
 
     marker.remove();
+    delete markerInstances[markerId];
 }
 
-/**
- * Moves a marker to the specified coordinates
- * @param {string} markerId - The marker ID.
- * @param {object} position - Options for animation like duration, offset, etc.
- */
 export function moveMarker(markerId, position) {
     const marker = markerInstances[markerId];
-    
+
     marker.setLngLat([position.lng, position.lat]);
+}
+
+export function createCurrentLocationMarker(container, options, position) {
+    let elementId = options.elementId;
+    if (!!elementId) {
+        options.element = document.getElementById(elementId);
+    }
+
+    let marker = new globalThis.maplibregl.Marker(options);
+    marker
+        .setLngLat([position.lng, position.lat])
+        .addTo(mapInstances[container]);
+
+    currentLocationMarkerInstances[container] = marker;
+}
+
+export function moveCurrentLocationMarker(container, position) {
+    let marker = currentLocationMarkerInstances[container];
+    if (marker) {
+        marker.setLngLat([position.lng, position.lat]);
+    }
+}
+
+export function removeCurrentLocationMarker(container) {
+    let marker = currentLocationMarkerInstances[container];
+    if (marker) {
+        marker.remove()
+        delete currentLocationMarkerInstances[container];
+    }
 }
 
 /**
@@ -1304,9 +1576,6 @@ export async function executeTransaction(container, data) {
             case "addSprite":
                 addSprite(container, d.data[0], d.data[1], d.data[2]);
                 break;
-            case "setSourceData":
-                setSourceData(container, d.data[0], d.data[1]);
-                break;
             case "removeControl":
                 removeControl(container, d.data[0]);
                 break;
@@ -1325,9 +1594,89 @@ export async function executeTransaction(container, data) {
             case "removeSprite":
                 removeSprite(container, d.data[0]);
                 break;
+            case "setSourceData":
+                setSourceData(container, d.data[0], d.data[1]);
+                break;
+            case "setSourceDataAsJson":
+                setSourceDataAsJson(container, d.data[0], d.data[1]);
+                break;
             default:
                 console.warn(`Unknown transaction event: ${d.event}`);
                 throw new Error(`Unknown transaction event: ${d.event}`);
         }
     }
+}
+
+/**
+ * Disables all rotation functionality
+ * @param {string} container - The map container.
+ */
+export function disableRotation(container) {
+    mapInstances[container].dragRotate.disable();
+    mapInstances[container].touchZoomRotate.disableRotation();
+    mapInstances[container].keyboard.disableRotation();
+}
+
+/**
+ * Disables map zoom gestures that conflict with terra-draw point editing:
+ * double-click / double-tap zoom, and tap-then-drag-vertical zoom.
+ * Pinch-to-zoom and scroll-wheel zoom remain enabled.
+ * @param {string} container - The map container.
+ */
+export function disableMapZoomGestures(container) {
+    const map = mapInstances[container];
+    if (!map) return;
+    map.doubleClickZoom.disable();
+    // _tapDragZoom is an internal handler inside touchZoomRotate; there is no
+    // public API to toggle it independently of pinch-zoom.
+    map.touchZoomRotate?._tapDragZoom?.disable?.();
+}
+
+/**
+ * Re-enables map zoom gestures previously disabled by disableMapZoomGestures.
+ * @param {string} container - The map container.
+ */
+export function enableMapZoomGestures(container) {
+    const map = mapInstances[container];
+    if (!map) return;
+    map.doubleClickZoom.enable();
+    map.touchZoomRotate?._tapDragZoom?.enable?.();
+}
+
+export function setLayoutProperty(container, layerId, name, value) {
+    mapInstances[container].setLayoutProperty(layerId, name, value);
+}
+
+/**
+ * Refreshes tiles in a specified source.
+ * @param {string} container - The map container.
+ * @param {string} sourceId - The source id
+ */
+export function refreshTiles(container, sourceId) {
+    mapInstances[container].refreshTiles(sourceId);
+}
+/**
+ * Refreshes tiles in a specified source and tiles.
+ * @param {string} container - The map container.
+ * @param {string} sourceId - The source id
+ * @param {Array<object>} tileIds - Tile id objects with { z, x, y }
+ */
+export function refreshTileIDs(container, sourceId, tileIds) {
+    const mapInstance = mapInstances[container];
+    const tileManager = mapInstance.style.tileManagers[sourceId];
+
+
+    for (const id of tileManager._inViewTiles.getAllIds()) {
+        const tile = tileManager._inViewTiles.getTileById(id);
+        const c = tile.tileID.canonical;
+
+        if (tileIds.some(t => t.z === c.z && t.x === c.x && t.y === c.y)) {
+            tileManager._reloadTile(id, 'expired');
+        }
+    }
+    tileManager._outOfViewCache.filter(tile =>
+        !tileIds.some(t => t.z === tile.tileID.canonical.z &&
+            t.x === tile.tileID.canonical.x &&
+            t.y === tile.tileID.canonical.y)
+    );
 }

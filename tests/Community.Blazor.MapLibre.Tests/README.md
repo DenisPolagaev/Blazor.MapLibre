@@ -53,6 +53,7 @@ dotnet test
 # Run tests for a specific framework
 dotnet test --framework net8.0
 dotnet test --framework net9.0
+dotnet test --framework net10.0
 
 # Run with verbose output
 dotnet test --verbosity detailed

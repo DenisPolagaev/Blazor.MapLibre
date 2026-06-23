@@ -1,0 +1,95 @@
+@page "/examples/terra-draw"
+
+@using Community.Blazor.MapLibre.TerraDrawPlugin
+@using Community.Blazor.MapLibre.Models
+@using System.Text.Json
+
+<ViewOnGitHub FilePath="examples/Community.Blazor.MapLibre.Examples/Examples/TerraDraw.razor"/>
+
+<MapLibre @ref="_map"
+          Options="_mapOptions"
+          OnLoad="OnMapLoad"
+          Class="rounded-top"
+          Height="600px">
+</MapLibre>
+
+<div class="d-flex flex-wrap gap-2 mt-3">
+    @foreach (var mode in _modes)
+    {
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => SetMode(mode)">
+            @mode
+        </button>
+    }
+    <button class="btn btn-sm btn-outline-secondary" @onclick="FinishGeometry">Finish</button>
+    <button class="btn btn-sm btn-outline-danger" @onclick="StopDrawing">Stop</button>
+</div>
+
+<textarea class="form-control mt-3" rows="12" readonly>@_geoJsonSnapshot</textarea>
+
+@code {
+    private MapLibre _map = new();
+    private TerraDrawPlugin _terraDraw = new();
+    private Listener? _changeListener;
+    private string _geoJsonSnapshot = "Draw on the map to see GeoJSON here.";
+
+    private readonly MapOptions _mapOptions = new()
+    {
+        Style = ExampleMapStyles.OpenStreetMap,
+        Center = new LngLat(-73.99, 40.75),
+        Zoom = 11,
+    };
+
+    private readonly string[] _modes = ["point", "linestring", "polygon", "select", "delete"];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _map.RegisterPlugin(_terraDraw);
+        }
+    }
+
+    private async Task OnMapLoad(EventArgs _)
+    {
+        await _terraDraw.AddTerraDrawToolAsync();
+        await _terraDraw.SetTerraDrawModeAsync("polygon");
+        await _terraDraw.DisableMapZoomGesturesAsync();
+
+        _changeListener = await _terraDraw.AddTerraDrawChangeListener<string>(OnGeometriesChanged, 150);
+    }
+
+    private void OnGeometriesChanged(string geoJson)
+    {
+        _geoJsonSnapshot = FormatJson(geoJson);
+        StateHasChanged();
+    }
+
+    private async Task SetMode(string mode)
+    {
+        await _terraDraw.SetTerraDrawModeAsync(mode);
+    }
+
+    private async Task FinishGeometry()
+    {
+        await _terraDraw.FinishGeometryAsync();
+    }
+
+    private async Task StopDrawing()
+    {
+        await _terraDraw.StopTerraDrawAsync();
+        _geoJsonSnapshot = "Drawing stopped.";
+    }
+
+    private static string FormatJson(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+}

@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.627, 39.114] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.582, 39.099] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.551, 39.128] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.609, 39.091] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.534, 39.106] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.671, 39.048] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.498, 39.142] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.645, 39.133] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.517, 39.078] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.593, 39.151] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.563, 39.062] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.621, 39.167] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.479, 39.119] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.638, 39.084] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.505, 39.095] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.576, 39.044] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.654, 39.109] }, "properties": { "name": "Dollar Tree" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.541, 39.159] }, "properties": { "name": "Dollar Tree" } }
+  ]
+}

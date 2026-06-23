@@ -129,14 +129,15 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     #region Setup
 
+    private bool _mapInitialized;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             await JsRuntime.InvokeAsync<IJSObjectReference>("import",
-                "./_content/Community.Blazor.MapLibre/maplibre-5.12.0.min.js");
+                "./_content/Community.Blazor.MapLibre/maplibre-gl/dist/maplibre-gl.js");
 
-            // Import your JavaScript module
             _jsModule = await JsRuntime.InvokeAsync<IJSObjectReference>("import",
                 "./_content/Community.Blazor.MapLibre/MapLibre.razor.js");
 
@@ -153,15 +154,33 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
             {
                 await plugin.Initialize(_mapObject, JsRuntime);
             }
+
+            _mapInitialized = true;
         }
     }
 
-    public void RegisterPlugin(IMapLibrePlugin plugin)
+    public async Task RegisterPlugin(IMapLibrePlugin plugin)
     {
         ArgumentNullException.ThrowIfNull(plugin, nameof(plugin));
 
+        if (_plugins.Contains(plugin))
+        {
+            return;
+        }
+
         _plugins.Add(plugin);
+
+        if (_mapInitialized)
+        {
+            await plugin.Initialize(_mapObject, JsRuntime);
+        }
     }
+
+    /// <summary>
+    /// Returns a reference to the underlying MapLibre GL JS map instance.
+    /// </summary>
+    public async ValueTask<IJSObjectReference> GetMapAsync() =>
+        await _jsModule.InvokeAsync<IJSObjectReference>("getMap", MapId);
 
     public async ValueTask DisposeAsync()
     {
@@ -265,6 +284,65 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
+    /// Shows the tile boundaries for debug purposes.
+    /// </summary>
+    public async ValueTask ShowTileBoundaries(bool shouldShowTileBoundaries)
+    {
+        await _jsModule.InvokeVoidAsync("showTileBoundaries", MapId, shouldShowTileBoundaries);
+    }
+
+    /// <summary>
+    /// Adds a geolocate control to the given map container.
+    /// </summary>
+    public async ValueTask AddGeolocateControl(GeolocateControlOptions options, ControlPosition? position = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("addGeolocateControl", options, position);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("addGeolocateControl", MapId, options, position);
+    }
+
+    /// <summary>
+    /// Adds a navigation control to the given map container.
+    /// </summary>
+    public async ValueTask AddNavigationControl(NavigationControlOptions options, ControlPosition? position = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("addNavigationControl", options, position);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("addNavigationControl", MapId, options, position);
+    }
+
+    /// <summary>
+    /// Adds a scale control to the given map container.
+    /// </summary>
+    public async ValueTask AddScaleControl(ScaleControlOptions options, ControlPosition? position = null)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("addScaleControl", options, position);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("addScaleControl", MapId, options, position);
+    }
+
+    /// <summary>
+    /// Updates the unit of the scale control.
+    /// </summary>
+    /// <param name="unit">The unit to set ("metric", "imperial", or "nautical").</param>
+    public async ValueTask SetScaleControlUnit(string unit)
+    {
+        await _jsModule.InvokeVoidAsync("setScaleControlUnit", MapId, unit);
+    }
+
+    /// <summary>
     /// Adds an image to the map for use in styling or layer configuration.
     /// </summary>
     /// <param name="id">The unique identifier for the image to be added to the map.</param>
@@ -322,9 +400,20 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
                 str => _bulkTransaction.Add("setSourceData", id, str));
             return;
         }
-        await source.Data.Match( 
-            feature =>  _jsModule.InvokeVoidAsync("setSourceData", MapId, id, feature), 
+        await source.Data.Match(
+            feature => _jsModule.InvokeVoidAsync("setSourceData", MapId, id, feature),
             str => _jsModule.InvokeVoidAsync("setSourceData", MapId, id, str));
+    }
+
+    public async ValueTask SetSourceDataAsJson(string id, string data)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setSourceDataAsJson", id, data);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("setSourceDataAsJson", MapId, id, data);
     }
 
     /// <summary>
@@ -612,14 +701,6 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <returns></returns>
     public async ValueTask<string[]> GetLayersOrder() =>
         await _jsModule.InvokeAsync<string[]>("getLayersOrder", MapId);
-
-    /// <summary>
-    /// Checks if a layer exists in the map's style by its ID.
-    /// </summary>
-    /// <param name="id">The ID of the layer to check.</param>
-    /// <returns>True if the layer exists, false otherwise.</returns>
-    public async ValueTask<bool> HasLayer(string id) =>
-        await _jsModule.InvokeAsync<bool>("hasLayer", MapId, id);
 
     /// <summary>
     /// Returns the value of a layout property in the specified style layer.
@@ -922,6 +1003,9 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public async ValueTask<object[]> QueryRenderedFeatures(object query, object? options = null) =>
         await _jsModule.InvokeAsync<object[]>("queryRenderedFeatures", MapId, query, options);
 
+    public async ValueTask<object[]> QueryRenderedFeaturesWithoutGeometriesReturned(object query, object? options = null) =>
+        await _jsModule.InvokeAsync<object[]>("queryRenderedFeaturesWithoutGeometriesReturned", MapId, query, options);
+
     /// <summary>
     /// Returns an array of <see cref="SimpleFeature"/> objects representing features within the specified vector tile or GeoJSON source that satisfy the query parameters.
     /// </summary>
@@ -1185,6 +1269,9 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public async ValueTask SetFeatureState(FeatureIdentifier feature, object state) =>
         await _jsModule.InvokeVoidAsync("setFeatureState", MapId, feature, state);
 
+    public async ValueTask SetGlobalStateProperty(string propertyName, object value) =>
+        await _jsModule.InvokeVoidAsync("setGlobalStateProperty", MapId, propertyName, value);
+
     /// <summary>
     /// Sets the filter for the specified style layer.
     /// </summary>
@@ -1309,6 +1396,32 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeVoidAsync("createPopup", MapId, popup, options);
     }
 
+    /// <summary>
+    /// Disables all rotation functionality.
+    /// </summary>
+    public async ValueTask DisableRotation()
+    {
+        await _jsModule.InvokeVoidAsync("disableRotation", MapId);
+    }
+
+    /// <summary>
+    /// Disables double-click/double-tap zoom and tap-then-drag-vertical zoom.
+    /// Use while editing geometries with terra-draw so those gestures do not
+    /// conflict with vertex dragging. Pinch and scroll-wheel zoom remain enabled.
+    /// </summary>
+    public async ValueTask DisableMapZoomGesturesAsync()
+    {
+        await _jsModule.InvokeVoidAsync("disableMapZoomGestures", MapId);
+    }
+
+    /// <summary>
+    /// Re-enables the zoom gestures disabled by <see cref="DisableMapZoomGesturesAsync"/>.
+    /// </summary>
+    public async ValueTask EnableMapZoomGesturesAsync()
+    {
+        await _jsModule.InvokeVoidAsync("enableMapZoomGestures", MapId);
+    }
+
     #endregion
 
     #region Marker
@@ -1343,7 +1456,28 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public async Task MoveMarker(Guid markerId, LngLat position)
         => await _jsModule.InvokeVoidAsync("moveMarker", markerId, position);
 
+    public async Task CreateCurrentLocationMarker(MarkerOptions options, LngLat position)
+        => await _jsModule.InvokeVoidAsync("createCurrentLocationMarker", MapId, options, position);
+
+    public async Task MoveCurrentLocationMarker(LngLat position)
+        => await _jsModule.InvokeVoidAsync("moveCurrentLocationMarker", MapId, position);
+
+    public async Task RemoveCurrentLocationMarker()
+        => await _jsModule.InvokeVoidAsync("removeCurrentLocationMarker", MapId);
+
     #endregion
+
+    public async ValueTask RefreshTiles(string sourceId, TileId[]? tileIds = null)
+    {
+        if (tileIds is null)
+        {
+            await _jsModule.InvokeVoidAsync("refreshTiles", MapId, sourceId);
+        }
+        else
+        {
+            await _jsModule.InvokeVoidAsync("refreshTileIDs", MapId, sourceId, tileIds);
+        }
+    }
 
     #region Bulk Transaction
 

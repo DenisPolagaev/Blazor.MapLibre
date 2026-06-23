@@ -33,3 +33,8 @@ The library features an extensible plugin system.
 - Maintains a clean separation between core library and optional extensions
 
 See further guidance to [Create a plugin](./create-a-plugin.md).
+
+Built-in plugin examples in this repository:
+
+- [Terra Draw plugin](./terra-draw-plugin.md) — draw and edit geometries with [Terra Draw](https://github.com/JamesLMilner/terra-draw)
+- Mapbox GL Draw — see the [Mapbox GL Draw example](../examples/mapbox-gl-draw.md)

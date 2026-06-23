@@ -19,7 +19,10 @@
     private MapLibre _mapListener { get; set; } = new MapLibre();
     private MapboxGlDrawPlugin _mapboxGlPlugin = new MapboxGlDrawPlugin();
 
-    private readonly MapOptions _mapOptions = new();
+    private readonly MapOptions _mapOptions = new()
+    {
+        Style = ExampleMapStyles.OpenStreetMap,
+    };
 
     public decimal size { get; set; } = 0m;
 
@@ -28,7 +31,7 @@
         _mapboxGlPlugin.OnDrawUpdate = OnDrawUpdateCallback;
         if (firstRender)
         {
-            _mapListener.RegisterPlugin(_mapboxGlPlugin);
+            await _mapListener.RegisterPlugin(_mapboxGlPlugin);
         }
     }
 

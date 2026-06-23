@@ -72,7 +72,7 @@ This project should help people working on Blazor projects to use maps more easi
 
 ### Prerequisites
 
-This project is created on .NET 8 so you need to use this or never version to run it.
+The library and plugins target .NET 8, 9, and 10. Examples and the documentation site use .NET 10 — install the [.NET 10 SDK](https://dotnet.microsoft.com/download) or newer to build and run them.
 
 ### Installation
 

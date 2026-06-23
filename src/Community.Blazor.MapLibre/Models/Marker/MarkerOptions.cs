@@ -52,6 +52,13 @@ public class MarkerOptions
     public ElementReference? Element { get; set; }
 
     /// <summary>
+    /// DOM element id to use as a marker.
+    /// </summary>
+    [JsonPropertyName("elementId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ElementId { get; set; }
+
+    /// <summary>
     /// The offset in pixels as a [x, y] array to apply relative to the element's center. 
     /// Negatives indicate left and up.
     /// </summary>

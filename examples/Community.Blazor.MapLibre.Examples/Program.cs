@@ -15,6 +15,8 @@ builder.RootComponents.RegisterCustomElement<AddPopup>("add-popup");
 builder.RootComponents.RegisterCustomElement<FitBounds>("fit-bounds");
 builder.RootComponents.RegisterCustomElement<LoadGeoJson>("load-geojson");
 builder.RootComponents.RegisterCustomElement<MapboxGlDraw>("mapbox-gl-draw");
+builder.RootComponents.RegisterCustomElement<TerraDraw>("terra-draw");
+builder.RootComponents.RegisterCustomElement<MapCompare>("map-compare");
 builder.RootComponents.RegisterCustomElement<MultipleMaps>("multiple-maps");
 builder.RootComponents.RegisterCustomElement<RenderGlobe>("render-globe");
 

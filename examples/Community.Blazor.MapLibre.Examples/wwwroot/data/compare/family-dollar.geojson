@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.589, 39.087] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.612, 39.121] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.528, 39.134] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.657, 39.072] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.546, 39.056] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.601, 39.145] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.491, 39.103] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.633, 39.038] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.569, 39.118] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.514, 39.124] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.648, 39.124] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.558, 39.073] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.624, 39.156] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.503, 39.068] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.595, 39.102] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.536, 39.089] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.664, 39.096] }, "properties": { "name": "Family Dollar" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-94.579, 39.139] }, "properties": { "name": "Family Dollar" } }
+  ]
+}
