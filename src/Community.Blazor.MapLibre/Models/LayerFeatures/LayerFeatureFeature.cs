@@ -15,6 +15,9 @@ public class LayerFeatureFeature : LayerFeature
 
 	[JsonPropertyName("properties")]
 	public Dictionary<string, object>? Properties { get; set; }
+
+	[JsonPropertyName("layer")]
+	public Dictionary<string, object>? Layer { get; set; }
 	
 	/// <summary>
 	/// <inheritdoc/>

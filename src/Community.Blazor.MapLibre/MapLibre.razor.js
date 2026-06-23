@@ -5,6 +5,7 @@ const optionsInstances = {};
 const markerInstances = {};
 const currentLocationMarkerInstances = {};
 const scaleControlInstances = {};
+const listenerRegistry = {};
 
 /**
  * Ensures maplibre-gl is on globalThis before creating maps.
@@ -186,13 +187,59 @@ function geometryIntersectsBbox(geometry, bbox) {
     }
 }
 
+const customLayerHandlers = new Map();
+
+function createTransformConstrainFn(dotnetReference) {
+    return (transform) => {
+        const payload = JSON.stringify({
+            center: transform.center,
+            zoom: transform.zoom,
+            bearing: transform.bearing,
+            pitch: transform.pitch,
+            roll: transform.roll,
+            elevation: transform.elevation,
+        });
+
+        const resultJson = dotnetReference.invokeMethod('Invoke', payload);
+        const result = JSON.parse(resultJson);
+        if (result.center) {
+            transform.center = result.center;
+        }
+        if (result.zoom !== undefined) {
+            transform.zoom = result.zoom;
+        }
+        if (result.bearing !== undefined) {
+            transform.bearing = result.bearing;
+        }
+        if (result.pitch !== undefined) {
+            transform.pitch = result.pitch;
+        }
+        if (result.roll !== undefined) {
+            transform.roll = result.roll;
+        }
+        if (result.elevation !== undefined) {
+            transform.elevation = result.elevation;
+        }
+
+        return transform;
+    };
+}
+
 /**
  * Initializes a MapLibre map instance with the given options and connects it to a .NET reference for interop functionality.
  *
  * @param {Object} options - Configuration options for initializing the MapLibre map instance.
  * @param {Object} dotnetReference - A .NET instance reference for invoking interop methods.
+ * @param {Object} [transformConstrainReference] - Optional .NET reference for transformConstrain callback.
  */
-export function initializeMap(options, dotnetReference) {
+export function initializeMap(options, dotnetReference, transformConstrainReference) {
+    if (transformConstrainReference) {
+        options = {
+            ...options,
+            transformConstrain: createTransformConstrainFn(transformConstrainReference),
+        };
+    }
+
     const map = new globalThis.maplibregl.Map(options);
 
     optionsInstances[options.container] = options;
@@ -219,28 +266,99 @@ export function getMap(container) {
 }
 
 
+function createMapEventHandler(dotnetReference) {
+    return function (e) {
+        e.target = null;
+        const result = JSON.stringify(e);
+        dotnetReference.invokeMethodAsync('Invoke', result).catch(console.error);
+    };
+}
+
+function registerListener(container, eventType, handler, layerIds) {
+    const listenerId = crypto.randomUUID();
+    listenerRegistry[listenerId] = { container, eventType, handler, layerIds };
+    return listenerId;
+}
+
+function attachMapListener(map, eventType, handler, layerIds) {
+    if (layerIds === undefined || layerIds === null) {
+        map.on(eventType, handler);
+    } else {
+        map.on(eventType, layerIds, handler);
+    }
+}
+
+function detachMapListener(map, entry) {
+    if (entry.layerIds === undefined || entry.layerIds === null) {
+        map.off(entry.eventType, entry.handler);
+    } else {
+        map.off(entry.eventType, entry.layerIds, entry.handler);
+    }
+}
+
 /**
  * Attaches an event listener to a specified map instance.
  *
  * @param {string} container - The identifier for the specific map instance.
  * @param {string} eventType - The type of event to listen for (e.g., "click", "zoom").
  * @param {object} dotnetReference - A reference to a .NET object used for invoking asynchronous methods.
- * @param {string | string[]} layerIds - Optional layer to pass when adding the event listener. If not provided, the event is added without a layer.
+ * @param {string | string[]} layerIds - Optional layer to pass when adding the event listener.
+ * @returns {string} Listener id for use with off().
  */
 export function on(container, eventType, dotnetReference, layerIds) {
-    if (layerIds === undefined || layerIds === null) {
-        mapInstances[container].on(eventType, function (e) {
-            e.target = null; // Remove map to prevent circular references.
-            const result = JSON.stringify(e);
-            dotnetReference.invokeMethodAsync('Invoke', result)
-        })
-    } else {
-        mapInstances[container].on(eventType, layerIds, function (e) {
-            e.target = null; // Remove map to prevent circular references.
-            const result = JSON.stringify(e);
-            dotnetReference.invokeMethodAsync('Invoke', result)
-        })
+    const map = mapInstances[container];
+    const handler = createMapEventHandler(dotnetReference);
+    attachMapListener(map, eventType, handler, layerIds);
+    return registerListener(container, eventType, handler, layerIds);
+}
+
+/**
+ * Removes a previously registered event listener.
+ *
+ * @param {string} container - The identifier for the specific map instance.
+ * @param {string} listenerId - The id returned from on() or once().
+ */
+export function off(container, listenerId) {
+    const entry = listenerRegistry[listenerId];
+    if (!entry || entry.container !== container) {
+        return;
     }
+
+    const map = mapInstances[container];
+    if (map) {
+        detachMapListener(map, entry);
+    }
+
+    delete listenerRegistry[listenerId];
+}
+
+/**
+ * Attaches a one-time event listener to a specified map instance.
+ *
+ * @param {string} container - The identifier for the specific map instance.
+ * @param {string} eventType - The type of event to listen for.
+ * @param {object} dotnetReference - A reference to a .NET object used for invoking asynchronous methods.
+ * @param {string | string[]} layerIds - Optional layer ids.
+ * @returns {string} Listener id for use with off() before the event fires.
+ */
+export function once(container, eventType, dotnetReference, layerIds) {
+    const map = mapInstances[container];
+    const listenerId = crypto.randomUUID();
+    const handler = function (e) {
+        e.target = null;
+        const result = JSON.stringify(e);
+        dotnetReference.invokeMethodAsync('Invoke', result).catch(console.error);
+        off(container, listenerId);
+    };
+
+    if (layerIds === undefined || layerIds === null) {
+        map.once(eventType, handler);
+    } else {
+        map.once(eventType, layerIds, handler);
+    }
+
+    listenerRegistry[listenerId] = { container, eventType, handler, layerIds, once: true };
+    return listenerId;
 }
 /**
  * Adds a specified control to the given map container.
@@ -383,12 +501,17 @@ export function addLayer(container, layer, beforeId) {
  * @param {Object} source - The source configuration object to be added.
  */
 export function addSource(container, id, source) {
+    const map = mapInstances[container];
+    if (!map) {
+        throw new Error(`Map instance not found for container "${container}". Ensure the map is initialized before calling addSource.`);
+    }
+
     if (source.type === 'geojson') {
         const data = cutAntiMeridian(container, source.data);
         source.data = data;
     }
 
-    mapInstances[container].addSource(id, source);
+    map.addSource(id, source);
 }
 
 
@@ -415,7 +538,7 @@ export function setSourceData(container, id, data) {
  * @param {string} id - The unique identifier for the source you wish to update.
  * @param {string} data - The GeoJSON data you wish to apply to the source
  */
-    export function setSourceDataAsJson(container, id, data) {
+export function setSourceDataAsJson(container, id, data) {
     let jsonData = JSON.parse(data);
     jsonData = cutAntiMeridian(container, jsonData);
     const source = mapInstances[container].getSource(id);
@@ -423,6 +546,33 @@ export function setSourceData(container, id, data) {
         throw new Error(`Could not find source with id ${id}`);
     }
     source.setData(jsonData);
+}
+
+/**
+ * Applies an incremental diff to a GeoJSON source.
+ *
+ * @param {string} container - The map container id.
+ * @param {string} id - The GeoJSON source id.
+ * @param {object} diff - A GeoJSONSourceDiff object (add, remove, removeAll, update).
+ * @param {boolean} [waitForCompletion=false] - When true, waits until the worker finishes processing.
+ * @returns {Promise<void>|undefined}
+ */
+export async function updateSourceData(container, id, diff, waitForCompletion = false) {
+    const source = mapInstances[container].getSource(id);
+    if (source === undefined) {
+        throw new Error(`Could not find source with id ${id}`);
+    }
+
+    if (typeof source.updateData !== 'function') {
+        throw new Error(`Source with id ${id} does not support updateData`);
+    }
+
+    if (waitForCompletion) {
+        await source.updateData(diff, true);
+        return;
+    }
+
+    source.updateData(diff, false);
 }
 
 /**
@@ -659,7 +809,7 @@ export function getCenterElevation(container) {
  * @param {string} container - The identifier for the desired container.
  * @returns {*} The container instance associated with the specified container identifier.
  */
-export function etContainer(container) {
+export function getContainer(container) {
     return mapInstances[container].getContainer();
 }
 
@@ -949,7 +1099,7 @@ export function hasImage(container, id) {
  * @param {string} container - The identifier of the map container.
  * @returns {boolean} True if the map is moving.
  */
-export function sMoving(container) {
+export function isMoving(container) {
     return mapInstances[container].isMoving();
 }
 
@@ -1089,6 +1239,10 @@ export function project(container, lngLat) {
  */
 export function queryRenderedFeatures(container, query, options) {
     return mapInstances[container].queryRenderedFeatures(query, options);
+}
+
+export function queryRenderedFeaturesJson(container, query, options) {
+    return JSON.stringify(mapInstances[container].queryRenderedFeatures(query, options));
 }
 
 export function queryRenderedFeaturesWithoutGeometriesReturned(container, query, options) {
@@ -1360,6 +1514,53 @@ export function setTerrain(container, options) {
     mapInstances[container].setTerrain(options);
 }
 
+export function setSky(container, sky) {
+    mapInstances[container].setSky(sky);
+}
+
+export function setLight(container, light) {
+    mapInstances[container].setLight(light);
+}
+
+export function setTransformConstrain(container, dotnetReference) {
+    mapInstances[container].transformConstrain = createTransformConstrainFn(dotnetReference);
+}
+
+export function addCustomLayer(container, layerId, options, dotnetReference) {
+    const map = mapInstances[container];
+    customLayerHandlers.set(layerId, dotnetReference);
+
+    const layer = {
+        id: layerId,
+        type: 'custom',
+        renderingMode: options?.renderingMode ?? '2d',
+        onAdd() {
+            dotnetReference.invokeMethodAsync('OnAdd').catch(console.error);
+        },
+        onRemove() {
+            dotnetReference.invokeMethodAsync('OnRemove').catch(console.error);
+            customLayerHandlers.delete(layerId);
+        },
+        render() {
+            dotnetReference.invokeMethodAsync('OnRender').catch(console.error);
+        },
+    };
+
+    map.addLayer(layer);
+}
+
+export function timeControlSetNow(timestamp) {
+    globalThis.maplibregl.timeControl.setNow(timestamp);
+}
+
+export function timeControlRestoreNow() {
+    globalThis.maplibregl.timeControl.restoreNow();
+}
+
+export function timeControlIsFrozen() {
+    return globalThis.maplibregl.timeControl.isTimeFrozen();
+}
+
 /**
  * Updates the requestManager's transform request with a new function.
  * @param {string} container - The map container.
@@ -1600,6 +1801,9 @@ export async function executeTransaction(container, data) {
             case "setSourceDataAsJson":
                 setSourceDataAsJson(container, d.data[0], d.data[1]);
                 break;
+            case "updateSourceData":
+                updateSourceData(container, d.data[0], d.data[1], d.data[2] ?? false);
+                break;
             default:
                 console.warn(`Unknown transaction event: ${d.event}`);
                 throw new Error(`Unknown transaction event: ${d.event}`);
@@ -1643,8 +1847,21 @@ export function enableMapZoomGestures(container) {
     map.touchZoomRotate?._tapDragZoom?.enable?.();
 }
 
-export function setLayoutProperty(container, layerId, name, value) {
-    mapInstances[container].setLayoutProperty(layerId, name, value);
+export function setLayoutProperty(container, layerId, name, value, options) {
+    mapInstances[container].setLayoutProperty(layerId, name, value, options);
+}
+
+/**
+ * Sets a paint property on a style layer.
+ *
+ * @param {string} container - The map container id.
+ * @param {string} layerId - The layer id.
+ * @param {string} name - The paint property name.
+ * @param {*} value - The paint property value.
+ * @param {object} [options] - Optional style setter options.
+ */
+export function setPaintProperty(container, layerId, name, value, options) {
+    mapInstances[container].setPaintProperty(layerId, name, value, options);
 }
 
 /**

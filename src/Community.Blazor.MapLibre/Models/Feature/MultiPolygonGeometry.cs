@@ -15,8 +15,6 @@ public class MultiPolygonGeometry : IGeometry
     /// <summary>
     /// <inheritdoc/>
     /// </summary>
-    public LngLatBounds GetBounds()
-    {
-        throw new NotImplementedException();
-    }
+    public LngLatBounds GetBounds() =>
+        GeometryBounds.FromPositions(Coordinates.SelectMany(polygon => polygon.SelectMany(ring => ring)));
 }

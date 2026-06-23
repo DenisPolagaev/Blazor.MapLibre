@@ -421,7 +421,7 @@ public class MapOptions
     /// </summary>
     [JsonPropertyName("style")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public object? Style { get; set; } = "https://demotiles.maplibre.org/style.json";
+    public object? Style { get; set; } = MapStyles.OpenStreetMap;
 
     /// <summary>
     /// Enables \"drag to pitch\" interaction, or provides options for pitch behavior.
@@ -469,11 +469,40 @@ public class MapOptions
     public bool? ValidateStyle { get; set; }
 
     /// <summary>
+    /// When true, animated map transitions respect the user's reduced-motion preference (MapLibre 5.12+).
+    /// </summary>
+    [JsonPropertyName("reduceMotion")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ReduceMotion { get; set; }
+
+    /// <summary>
+    /// Controls how many zoom levels vector tiles are sliced before overscaling (MapLibre 5.12+).
+    /// </summary>
+    [JsonPropertyName("experimentalZoomLevelsToOverscale")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ExperimentalZoomLevelsToOverscale { get; set; }
+
+    /// <summary>
+    /// Initial map projection. Can also be changed at runtime via <see cref="MapLibre.SetProjection"/>.
+    /// </summary>
+    [JsonPropertyName("projection")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProjectionSpecification? Projection { get; set; }
+
+    /// <summary>
     /// The initial zoom level of the map. If not specified, it is inherited from the style or defaults to 0.
     /// </summary>
     [JsonPropertyName("zoom")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Zoom { get; set; }
+
+    /// <summary>
+    /// Snaps zoom levels to a grid when zooming via keyboard, scroll wheel, zoom buttons,
+    /// double-click, or double-tap. A value of <c>1.0</c> rounds to whole zoom levels (MapLibre 5.17+).
+    /// </summary>
+    [JsonPropertyName("zoomSnap")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? ZoomSnap { get; set; }
   
     /// <summary>
     /// <para>

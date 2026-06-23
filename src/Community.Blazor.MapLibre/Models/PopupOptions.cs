@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using Community.Blazor.MapLibre.Models.Padding;
+using System.Text.Json.Serialization;
 
 namespace Community.Blazor.MapLibre.Models;
 
@@ -87,4 +88,12 @@ public class PopupOptions
     [JsonPropertyName("subpixelPositioning")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? SubpixelPositioning { get; set; }
+
+    /// <summary>
+    /// Padding around the popup relative to the map container edges, in pixels.
+    /// Prevents the popup from being positioned too close to the edge of the map (MapLibre 5.16+).
+    /// </summary>
+    [JsonPropertyName("padding")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PaddingOptions? Padding { get; set; }
 }

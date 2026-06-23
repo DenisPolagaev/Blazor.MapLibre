@@ -9,9 +9,12 @@ using Community.Blazor.MapLibre.Models.Marker;
 using Community.Blazor.MapLibre.Models.Padding;
 using Community.Blazor.MapLibre.Models.Sources;
 using Community.Blazor.MapLibre.Models.Sprite;
+using Community.Blazor.MapLibre.Models.LayerFeatures;
+using Community.Blazor.MapLibre.Models.Style;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace Community.Blazor.MapLibre;
 
@@ -36,7 +39,7 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// Manages a thread-safe dictionary for storing references to .NET object instances
     /// used in JavaScript interop callbacks. Each reference is identified by a unique Guid.
     /// </summary>
-    private readonly ConcurrentDictionary<Guid, DotNetObjectReference<CallbackHandler>> _references = new();
+    private readonly ConcurrentDictionary<string, DotNetObjectReference<CallbackHandler>> _references = new();
 
     /// <summary>
     /// Encapsulates a reference to the current .NET instance of the Map component, enabling JavaScript interop calls
@@ -55,11 +58,18 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// </summary>
     private IJSObjectReference _mapObject = null!;
 
+    private DotNetObjectReference<TransformConstrainCallbackHandler>? _transformConstrainReference;
+
+    private readonly ConcurrentDictionary<string, DotNetObjectReference<CustomLayerHandler>> _customLayerHandlers = new();
+
+    private static JsonSerializerOptions LayerFeatureSerializer => MapLibreJsonSerializer.Options;
+
     #region Parameters
 
     /// <summary>
     /// The HTML element in which MapLibre GL JS will render the map, or the element's string id.
     /// The specified element must have no children.
+    /// MapLibre 5.17+ also accepts an <c>HTMLElement</c> from another window (for example an iframe document).
     /// </summary>
     [Parameter]
     public string MapId { get; set; } = $"map-{Guid.NewGuid()}";
@@ -86,6 +96,12 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public MapOptions Options { get; set; } = new();
 
     /// <summary>
+    /// Optional transform constraint applied during map initialization (MapLibre 5.10+).
+    /// </summary>
+    [Parameter]
+    public Func<TransformConstrainState, TransformConstrainState>? TransformConstrain { get; set; }
+
+    /// <summary>
     /// Optional CSS class names. If given, these will be included in the class attribute of the component.
     /// </summary>
     [Parameter]
@@ -100,7 +116,7 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Callback event that is triggered when the map style completes loading.
-    /// Allows users to execute custom logic upon the successful initialization of the style.
+    /// Also fires after <see cref="SetStyle"/> applies a JSON style diff (<c>diff: true</c>) (MapLibre 5.16+).
     /// </summary>
     [Parameter]
     public EventCallback<EventArgs> OnStyleLoad { get; set; }
@@ -143,11 +159,20 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
             _dotNetObjectReference = DotNetObjectReference.Create(this);
 
-            // Just making sure the Container is being seeded on Create
-            Options.Container = MapId;
+            // Each component's DOM id is MapId; reset string containers so shared MapOptions instances work.
+            if (Options.Container is null or string)
+            {
+                Options.Container = MapId;
+            }
 
-            // Initialize the MapLibre map
-            _mapObject = await _jsModule.InvokeAsync<IJSObjectReference>("initializeMap", Options, _dotNetObjectReference);
+            if (TransformConstrain is not null)
+            {
+                _transformConstrainReference =
+                    DotNetObjectReference.Create(new TransformConstrainCallbackHandler(TransformConstrain));
+            }
+
+            _mapObject = await _jsModule.InvokeAsync<IJSObjectReference>(
+                "initializeMap", Options, _dotNetObjectReference, _transformConstrainReference);
 
             // Load the plugins after the map has been initialized
             foreach (var plugin in _plugins)
@@ -177,6 +202,12 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
+    /// Sets the map container to a DOM element (for example from an iframe document). MapLibre 5.17+.
+    /// Call before the first render.
+    /// </summary>
+    public void SetContainer(object containerElement) => Options.Container = containerElement;
+
+    /// <summary>
     /// Returns a reference to the underlying MapLibre GL JS map instance.
     /// </summary>
     public async ValueTask<IJSObjectReference> GetMapAsync() =>
@@ -188,6 +219,13 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         {
             value.Dispose();
         }
+
+        foreach (var value in _customLayerHandlers.Values)
+        {
+            value.Dispose();
+        }
+
+        _transformConstrainReference?.Dispose();
 
         try
         {
@@ -231,16 +269,39 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     public Task<Listener> AddAsyncListener<T>(string eventName, Func<T, Task> handler, object? layer = null) =>
         AddListenerInternal<T>(eventName, handler, layer);
 
+    public Task<Listener> AddListener<T>(string eventName, Action<T> handler, params string[] layerIds) =>
+        AddListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null);
+
+    public Task<Listener> AddAsyncListener<T>(string eventName, Func<T, Task> handler, params string[] layerIds) =>
+        AddListenerInternal<T>(eventName, handler, layerIds.Length > 0 ? layerIds : null);
+
     private async Task<Listener> AddListenerInternal<T>(string eventName, Delegate handler, object? layer = null)
     {
-        var callback = new CallbackHandler(_jsModule, eventName, handler, typeof(T));
+        var callback = new CallbackHandler(_jsModule, MapId, eventName, handler, typeof(T));
         var reference = DotNetObjectReference.Create(callback);
-        _references.TryAdd(Guid.NewGuid(), reference);
-
-        await _jsModule.InvokeVoidAsync("on", MapId, eventName, reference, layer);
+        var listenerId = await _jsModule.InvokeAsync<string>("on", MapId, eventName, reference, layer);
+        callback.Attach(reference, listenerId);
+        _references.TryAdd(listenerId, reference);
 
         return new Listener(callback);
     }
+
+    private async Task<Listener> AddOnceListenerInternal<T>(string eventName, Delegate handler, object? layer = null)
+    {
+        var callback = new CallbackHandler(_jsModule, MapId, eventName, handler, typeof(T));
+        var reference = DotNetObjectReference.Create(callback);
+        var listenerId = await _jsModule.InvokeAsync<string>("once", MapId, eventName, reference, layer);
+        callback.Attach(reference, listenerId);
+        _references.TryAdd(listenerId, reference);
+
+        return new Listener(callback);
+    }
+
+    public Task<Listener> AddOnceListener<T>(string eventName, Action<T> handler, object? layer = null) =>
+        AddOnceListenerInternal<T>(eventName, handler, layer);
+
+    public Task<Listener> AddOnceAsyncListener<T>(string eventName, Func<T, Task> handler, object? layer = null) =>
+        AddOnceListenerInternal<T>(eventName, handler, layer);
 
     /// <summary>
     /// Registers a synchronous click event listener for the map or a specific layer.
@@ -249,19 +310,70 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <param name="handler">The synchronous callback.</param>
     /// <returns>A task of type <see cref="Listener"/>.</returns>
     public Task<Listener> OnClick(string? layerId, Action<MapMouseEvent> handler) =>
-        AddListener("click", handler, layerId);
+        AddListenerInternal<MapMouseEvent>("click", handler, layerId);
 
-    /// <summary>
-    /// Registers an asynchronous click event listener for the map or a specific layer.
-    /// </summary>
-    /// <param name="layerId">The optional layer ID.</param>
-    /// <param name="handler">The asynchronous callback.</param>
-    /// <returns>A task of type <see cref="Listener"/>.</returns>
     public Task<Listener> OnClick(string? layerId, Func<MapMouseEvent, Task> handler) =>
-         AddAsyncListener("click", handler, layerId);
+        AddListenerInternal<MapMouseEvent>("click", handler, layerId);
 
-    public async Task<Listener> OnZoomChange(Action<MapEvent> handler) =>
-        await AddListener("zoom", handler);
+    public Task<Listener> OnZoomChange(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Zoom, handler);
+
+    public Task<Listener> OnZoomChange(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Zoom, handler);
+
+    public Task<Listener> OnMoveEnd(Action<MapMoveEvent> handler) =>
+        AddListener(MapEventNames.MoveEnd, handler);
+
+    public Task<Listener> OnMoveEnd(Func<MapMoveEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.MoveEnd, handler);
+
+    public Task<Listener> OnIdle(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.Idle, handler);
+
+    public Task<Listener> OnIdle(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Idle, handler);
+
+    public Task<Listener> OnMouseMove(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerId);
+
+    public Task<Listener> OnMouseMove(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.MouseMove, handler, layerId);
+
+    public Task<Listener> OnData(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.Data, handler);
+
+    public Task<Listener> OnData(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Data, handler);
+
+    public Task<Listener> OnSourceData(Action<MapDataEvent> handler) =>
+        AddListener(MapEventNames.SourceData, handler);
+
+    public Task<Listener> OnSourceData(Func<MapDataEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.SourceData, handler);
+
+    public Task<Listener> OnError(Action<MapErrorEvent> handler) =>
+        AddListener(MapEventNames.Error, handler);
+
+    public Task<Listener> OnError(Func<MapErrorEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.Error, handler);
+
+    public Task<Listener> OnTouchStart(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchStart, handler, layerId);
+
+    public Task<Listener> OnTouchStart(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchStart, handler, layerId);
+
+    public Task<Listener> OnTouchEnd(string? layerId, Action<MapMouseEvent> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchEnd, handler, layerId);
+
+    public Task<Listener> OnTouchEnd(string? layerId, Func<MapMouseEvent, Task> handler) =>
+        AddListenerInternal<MapMouseEvent>(MapEventNames.TouchEnd, handler, layerId);
+
+    public Task<Listener> OnStyleLoadListener(Action<MapEvent> handler) =>
+        AddListener(MapEventNames.StyleLoad, handler);
+
+    public Task<Listener> OnStyleLoadListener(Func<MapEvent, Task> handler) =>
+        AddAsyncListener(MapEventNames.StyleLoad, handler);
     #endregion
 
     #region Methods
@@ -414,6 +526,40 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         }
 
         await _jsModule.InvokeVoidAsync("setSourceDataAsJson", MapId, id, data);
+    }
+
+    /// <summary>
+    /// Applies an incremental diff to an existing GeoJSON source.
+    /// Requires every feature in the source to have a unique id (or <c>promoteId</c> on the source).
+    /// </summary>
+    /// <param name="id">The GeoJSON source id.</param>
+    /// <param name="diff">The diff to apply (remove, add, update).</param>
+    public async ValueTask UpdateSourceData(string id, GeoJsonSourceDiff diff)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("updateSourceData", id, diff, false);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("updateSourceData", MapId, id, diff, false);
+    }
+
+    /// <summary>
+    /// Applies an incremental diff to an existing GeoJSON source and waits until processing completes.
+    /// </summary>
+    /// <param name="id">The GeoJSON source id.</param>
+    /// <param name="diff">The diff to apply (remove, add, update).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async ValueTask UpdateSourceDataAsync(string id, GeoJsonSourceDiff diff, CancellationToken cancellationToken = default)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("updateSourceData", id, diff, true);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("updateSourceData", cancellationToken, MapId, id, diff, true);
     }
 
     /// <summary>
@@ -712,13 +858,6 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeAsync<object>("getLayoutProperty", MapId, layerId, name);
 
     /// <summary>
-    /// Retrieves the current light settings of the map.
-    /// </summary>
-    /// <returns>An object representing the map's light settings.</returns>
-    public async ValueTask<object> GetLight() =>
-        await _jsModule.InvokeAsync<object>("getLight", MapId);
-
-    /// <summary>
     /// Retrieves the maximum geographical bounds the map is constrained to.
     /// </summary>
     /// <returns>An object representing the map's maximum bounds or null if not set.</returns>
@@ -805,13 +944,6 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeAsync<double>("getRoll", MapId);
 
     /// <summary>
-    /// Retrieves the sky properties applied to the map style.
-    /// </summary>
-    /// <returns>An object representing the sky properties of the map.</returns>
-    public async ValueTask<object?> GetSky() =>
-        await _jsModule.InvokeAsync<object?>("getSky", MapId);
-
-    /// <summary>
     /// Retrieves a source from the map's style by its ID.
     /// </summary>
     /// <param name="id">The ID of the source to retrieve.</param>
@@ -847,6 +979,83 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// <returns>An object representing terrain options, or null if not loaded.</returns>
     public async ValueTask<object?> GetTerrain() =>
         await _jsModule.InvokeAsync<object?>("getTerrain", MapId);
+
+    /// <summary>
+    /// Enables 3D terrain using a raster-dem source.
+    /// </summary>
+    public async ValueTask SetTerrain(TerrainSpecification? terrain) =>
+        await _jsModule.InvokeVoidAsync("setTerrain", MapId, terrain);
+
+    /// <summary>
+    /// Retrieves the sky configuration of the map style.
+    /// </summary>
+    public async ValueTask<SkySpecification?> GetSky() =>
+        await _jsModule.InvokeAsync<SkySpecification?>("getSky", MapId);
+
+    /// <summary>
+    /// Sets the sky configuration of the map style.
+    /// </summary>
+    public async ValueTask SetSky(SkySpecification? sky) =>
+        await _jsModule.InvokeVoidAsync("setSky", MapId, sky);
+
+    /// <summary>
+    /// Retrieves the light configuration of the map style.
+    /// </summary>
+    public async ValueTask<LightSpecification?> GetLight() =>
+        await _jsModule.InvokeAsync<LightSpecification?>("getLight", MapId);
+
+    /// <summary>
+    /// Sets the light configuration of the map style.
+    /// </summary>
+    public async ValueTask SetLight(LightSpecification? light) =>
+        await _jsModule.InvokeVoidAsync("setLight", MapId, light);
+
+    /// <summary>
+    /// Overrides the map transform constraint callback at runtime (MapLibre 5.10+).
+    /// </summary>
+    public async ValueTask SetTransformConstrain(Func<TransformConstrainState, TransformConstrainState> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        _transformConstrainReference?.Dispose();
+        _transformConstrainReference = DotNetObjectReference.Create(new TransformConstrainCallbackHandler(handler));
+        await _jsModule.InvokeVoidAsync("setTransformConstrain", MapId, _transformConstrainReference);
+    }
+
+    /// <summary>
+    /// Adds a custom layer backed by .NET render callbacks.
+    /// </summary>
+    public async ValueTask AddCustomLayer(string layerId, CustomLayerOptions options, CustomLayerHandler handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        if (_customLayerHandlers.TryRemove(layerId, out var existing))
+        {
+            existing.Dispose();
+        }
+
+        var reference = DotNetObjectReference.Create(handler);
+        _customLayerHandlers[layerId] = reference;
+        await _jsModule.InvokeVoidAsync("addCustomLayer", MapId, layerId, options, reference);
+    }
+
+    /// <summary>
+    /// Freezes MapLibre's internal clock for deterministic rendering (MapLibre 5.10+).
+    /// </summary>
+    public async ValueTask TimeControlSetNow(double timestamp) =>
+        await _jsModule.InvokeVoidAsync("timeControlSetNow", timestamp);
+
+    /// <summary>
+    /// Restores MapLibre's internal clock to real time (MapLibre 5.10+).
+    /// </summary>
+    public async ValueTask TimeControlRestoreNow() =>
+        await _jsModule.InvokeVoidAsync("timeControlRestoreNow");
+
+    /// <summary>
+    /// Returns whether MapLibre time is frozen (MapLibre 5.10+).
+    /// </summary>
+    public async ValueTask<bool> TimeControlIsFrozen() =>
+        await _jsModule.InvokeAsync<bool>("timeControlIsFrozen");
 
     /// <summary>
     /// Retrieves the map's current vertical field of view in degrees.
@@ -1005,6 +1214,15 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     public async ValueTask<object[]> QueryRenderedFeaturesWithoutGeometriesReturned(object query, object? options = null) =>
         await _jsModule.InvokeAsync<object[]>("queryRenderedFeaturesWithoutGeometriesReturned", MapId, query, options);
+
+    /// <summary>
+    /// Queries rendered features and deserializes them as <see cref="LayerFeatureFeature"/> objects.
+    /// </summary>
+    public async ValueTask<LayerFeatureFeature[]> QueryRenderedLayerFeatures(object query, object? options = null)
+    {
+        var json = await _jsModule.InvokeAsync<string>("queryRenderedFeaturesJson", MapId, query, options);
+        return JsonSerializer.Deserialize<LayerFeatureFeature[]>(json, LayerFeatureSerializer) ?? [];
+    }
 
     /// <summary>
     /// Returns an array of <see cref="SimpleFeature"/> objects representing features within the specified vector tile or GeoJSON source that satisfy the query parameters.
@@ -1306,8 +1524,18 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
     /// The value of the layout property. Must be of a type appropriate for the property, as defined in the MapLibre Style Specification.</param>
     /// <param name="options"></param>
     /// Optional. An options object for configuring style setting behavior.
-    public async ValueTask SetLayoutProperty(string layerId, string name, object value, StyleSetterOptions options) =>
+    public async ValueTask SetLayoutProperty(string layerId, string name, object value, StyleSetterOptions? options = null) =>
         await _jsModule.InvokeVoidAsync("setLayoutProperty", MapId, layerId, name, value, options);
+
+    /// <summary>
+    /// Sets the value of a paint property in the specified style layer.
+    /// </summary>
+    /// <param name="layerId">The ID of the layer to set the paint property in.</param>
+    /// <param name="name">The name of the paint property to set.</param>
+    /// <param name="value">The value of the paint property.</param>
+    /// <param name="options">Optional style setter options.</param>
+    public async ValueTask SetPaintProperty(string layerId, string name, object value, StyleSetterOptions? options = null) =>
+        await _jsModule.InvokeVoidAsync("setPaintProperty", MapId, layerId, name, value, options);
 
     /// <summary>
     /// Sets the map's projection configuration, which determines how geographic coordinates are projected to the screen.
@@ -1329,10 +1557,13 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Adjusts the map's style to a new configuration or URL.
+    /// When <paramref name="options"/>.<see cref="SetStyleOptions.Diff"/> is <c>true</c> and
+    /// <paramref name="style"/> is a JSON object, MapLibre diffs the style and emits <c>style.load</c>
+    /// (see <see cref="OnStyleLoad"/>).
     /// </summary>
     /// <param name="style">The style configuration object or URL.</param>
     /// <param name="options">Optional parameters for the style application.</param>
-    public async ValueTask SetStyle(object style, object? options = null) =>
+    public async ValueTask SetStyle(object style, SetStyleOptions? options = null) =>
         await _jsModule.InvokeVoidAsync("setStyle", MapId, style, options);
 
     /// <summary>
