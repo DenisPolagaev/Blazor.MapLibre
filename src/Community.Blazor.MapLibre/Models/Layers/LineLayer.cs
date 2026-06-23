@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -12,16 +13,6 @@ public class LineLayer : Layer<LineLayerLayout, LineLayerPaint>
     /// </summary>
     [JsonPropertyName("source")]
     public required string Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the layer to use from a vector tile source.
-    /// </summary>
-    /// <remarks>
-    /// Required for vector tile sources. Specifies the layer within the vector tiles to use for this layer.
-    /// </remarks>
-    [JsonPropertyName("source-layer")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? SourceLayer { get; set; }
 }
 
 public class LineLayerLayout
@@ -179,4 +170,40 @@ public class LineLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<string>))]
     public OneOf<string, JsonArray>? LineGradient { get; set; }
+
+    [JsonPropertyName("line-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineOpacityTransition { get; set; }
+
+    [JsonPropertyName("line-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineColorTransition { get; set; }
+
+    [JsonPropertyName("line-translate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineTranslateTransition { get; set; }
+
+    [JsonPropertyName("line-width-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineWidthTransition { get; set; }
+
+    [JsonPropertyName("line-gap-width-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineGapWidthTransition { get; set; }
+
+    [JsonPropertyName("line-offset-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineOffsetTransition { get; set; }
+
+    [JsonPropertyName("line-blur-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineBlurTransition { get; set; }
+
+    [JsonPropertyName("line-dasharray-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LineDasharrayTransition { get; set; }
+
+    [JsonPropertyName("line-pattern-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? LinePatternTransition { get; set; }
 }

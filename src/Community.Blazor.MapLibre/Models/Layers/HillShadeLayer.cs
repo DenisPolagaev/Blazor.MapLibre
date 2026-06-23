@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -55,4 +56,30 @@ public class HillShadeLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<string>))]
     public OneOf<string, JsonArray>? HillshadeMethod { get; set; }
+
+    [JsonPropertyName("hillshade-illumination-altitude")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<double>))]
+    public OneOf<double, JsonArray>? HillshadeIlluminationAltitude { get; set; }
+
+    [JsonPropertyName("resampling")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<string>))]
+    public OneOf<string, JsonArray>? Resampling { get; set; }
+
+    [JsonPropertyName("hillshade-exaggeration-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HillshadeExaggerationTransition { get; set; }
+
+    [JsonPropertyName("hillshade-shadow-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HillshadeShadowColorTransition { get; set; }
+
+    [JsonPropertyName("hillshade-highlight-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HillshadeHighlightColorTransition { get; set; }
+
+    [JsonPropertyName("hillshade-accent-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HillshadeAccentColorTransition { get; set; }
 }

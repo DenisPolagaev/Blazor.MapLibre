@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -60,4 +61,33 @@ public class RasterLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<string>))]
     public OneOf<string, JsonArray>? RasterResampling { get; set; }
+
+    [JsonPropertyName("resampling")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OneOfJsonConverter<string>))]
+    public OneOf<string, JsonArray>? Resampling { get; set; }
+
+    [JsonPropertyName("raster-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? RasterOpacityTransition { get; set; }
+
+    [JsonPropertyName("raster-hue-rotate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? RasterHueRotateTransition { get; set; }
+
+    [JsonPropertyName("raster-brightness-min-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? RasterBrightnessMinTransition { get; set; }
+
+    [JsonPropertyName("raster-brightness-max-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? RasterBrightnessMaxTransition { get; set; }
+
+    [JsonPropertyName("raster-saturation-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? RasterSaturationTransition { get; set; }
+
+    [JsonPropertyName("raster-contrast-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? RasterContrastTransition { get; set; }
 }

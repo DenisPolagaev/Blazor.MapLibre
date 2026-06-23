@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -35,4 +36,8 @@ public class ColorReliefLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<string>))]
     public OneOf<string, JsonArray>? Resampling { get; set; }
+
+    [JsonPropertyName("color-relief-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? ColorReliefOpacityTransition { get; set; }
 }

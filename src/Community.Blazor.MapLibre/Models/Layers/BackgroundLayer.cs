@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -31,4 +32,16 @@ public class BackgroundLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? BackgroundOpacity { get; set; }
+
+    [JsonPropertyName("background-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? BackgroundColorTransition { get; set; }
+
+    [JsonPropertyName("background-pattern-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? BackgroundPatternTransition { get; set; }
+
+    [JsonPropertyName("background-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? BackgroundOpacityTransition { get; set; }
 }

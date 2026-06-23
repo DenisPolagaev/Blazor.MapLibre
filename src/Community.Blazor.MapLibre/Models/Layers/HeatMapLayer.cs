@@ -1,4 +1,5 @@
 ﻿using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -12,16 +13,6 @@ public class HeatMapLayer : Layer<HeatMapLayerLayout, HeatMapLayerPaint>
     /// </summary>
     [JsonPropertyName("source")]
     public required string Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the layer to use from a vector tile source.
-    /// </summary>
-    /// <remarks>
-    /// Required for vector tile sources. Specifies the layer within the vector tiles to use for this layer.
-    /// </remarks>
-    [JsonPropertyName("source-layer")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? SourceLayer { get; set; }
 }
 
 public class HeatMapLayerLayout
@@ -79,4 +70,16 @@ public class HeatMapLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? HeatmapOpacity { get; set; }
+
+    [JsonPropertyName("heatmap-radius-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HeatmapRadiusTransition { get; set; }
+
+    [JsonPropertyName("heatmap-intensity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HeatmapIntensityTransition { get; set; }
+
+    [JsonPropertyName("heatmap-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? HeatmapOpacityTransition { get; set; }
 }

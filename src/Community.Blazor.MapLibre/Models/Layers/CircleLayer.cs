@@ -1,7 +1,8 @@
 ﻿using System.Text.Json.Nodes;
-using OneOf;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
+using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
 
@@ -12,16 +13,6 @@ public class CircleLayer : Layer<CircleLayerLayout, CircleLayerPaint>
     /// </summary>
     [JsonPropertyName("source")]
     public required string Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the layer to use from a vector tile source.
-    /// </summary>
-    /// <remarks>
-    /// Required for vector tile sources. Specifies the layer within the vector tiles to use for this layer.
-    /// </remarks>
-    [JsonPropertyName("source-layer")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? SourceLayer { get; set; }
 }
 
 public class CircleLayerLayout
@@ -101,12 +92,44 @@ public class CircleLayerPaint
     public OneOf<double, JsonArray>? CircleStrokeOpacity { get; set; }
 
     /// <summary>
-    /// Controls the intensity of light emitted on the source features.
+    /// Mapbox-style extension; may be ignored by MapLibre GL JS. Controls emissive light intensity on source features.
     /// </summary>
     [JsonPropertyName("circle-emissive-strength")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? CircleEmissiveStrength { get; set; }
+
+    [JsonPropertyName("circle-radius-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleRadiusTransition { get; set; }
+
+    [JsonPropertyName("circle-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleColorTransition { get; set; }
+
+    [JsonPropertyName("circle-blur-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleBlurTransition { get; set; }
+
+    [JsonPropertyName("circle-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleOpacityTransition { get; set; }
+
+    [JsonPropertyName("circle-translate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleTranslateTransition { get; set; }
+
+    [JsonPropertyName("circle-stroke-width-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleStrokeWidthTransition { get; set; }
+
+    [JsonPropertyName("circle-stroke-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleStrokeColorTransition { get; set; }
+
+    [JsonPropertyName("circle-stroke-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? CircleStrokeOpacityTransition { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

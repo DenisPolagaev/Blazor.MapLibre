@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -9,10 +10,6 @@ public class FillExtrusionLayer : Layer<FillExtrusionLayerLayout, FillExtrusionL
 {
     [JsonPropertyName("source")]
     public required string Source { get; set; }
-
-    [JsonPropertyName("source-layer")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? SourceLayer { get; set; }
 }
 
 public class FillExtrusionLayerLayout
@@ -64,4 +61,28 @@ public class FillExtrusionLayerPaint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<bool>))]
     public OneOf<bool, JsonArray>? FillExtrusionVerticalGradient { get; set; }
+
+    [JsonPropertyName("fill-extrusion-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillExtrusionOpacityTransition { get; set; }
+
+    [JsonPropertyName("fill-extrusion-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillExtrusionColorTransition { get; set; }
+
+    [JsonPropertyName("fill-extrusion-translate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillExtrusionTranslateTransition { get; set; }
+
+    [JsonPropertyName("fill-extrusion-pattern-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillExtrusionPatternTransition { get; set; }
+
+    [JsonPropertyName("fill-extrusion-height-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillExtrusionHeightTransition { get; set; }
+
+    [JsonPropertyName("fill-extrusion-base-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillExtrusionBaseTransition { get; set; }
 }

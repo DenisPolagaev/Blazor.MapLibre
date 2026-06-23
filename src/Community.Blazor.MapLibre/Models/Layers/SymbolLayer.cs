@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -12,16 +13,6 @@ public class SymbolLayer : Layer<SymbolLayerLayout, SymbolLayerPaint>
     /// </summary>
     [JsonPropertyName("source")]
     public required string Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the layer to use from a vector tile source.
-    /// </summary>
-    /// <remarks>
-    /// Required for vector tile sources. Specifies the layer within the vector tiles to use for this layer.
-    /// </remarks>
-    [JsonPropertyName("source-layer")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? SourceLayer { get; set; }
 }
 
 public class SymbolLayerLayout
@@ -624,13 +615,67 @@ public class SymbolLayerPaint
     [JsonConverter(typeof(OneOfJsonConverter<MapViewport>))]
     public OneOf<MapViewport, JsonArray>? TextTranslateAnchor { get; set; }
 
+    /// <summary>
+    /// Mapbox-style extension; may be ignored by MapLibre GL JS.
+    /// </summary>
     [JsonPropertyName("icon-emissive-strength")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? IconEmissiveStrength { get; set; }
 
+    /// <summary>
+    /// Mapbox-style extension; may be ignored by MapLibre GL JS.
+    /// </summary>
     [JsonPropertyName("text-emissive-strength")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? TextEmissiveStrength { get; set; }
+
+    [JsonPropertyName("icon-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? IconOpacityTransition { get; set; }
+
+    [JsonPropertyName("icon-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? IconColorTransition { get; set; }
+
+    [JsonPropertyName("icon-halo-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? IconHaloColorTransition { get; set; }
+
+    [JsonPropertyName("icon-halo-width-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? IconHaloWidthTransition { get; set; }
+
+    [JsonPropertyName("icon-halo-blur-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? IconHaloBlurTransition { get; set; }
+
+    [JsonPropertyName("icon-translate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? IconTranslateTransition { get; set; }
+
+    [JsonPropertyName("text-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? TextOpacityTransition { get; set; }
+
+    [JsonPropertyName("text-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? TextColorTransition { get; set; }
+
+    [JsonPropertyName("text-halo-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? TextHaloColorTransition { get; set; }
+
+    [JsonPropertyName("text-halo-width-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? TextHaloWidthTransition { get; set; }
+
+    [JsonPropertyName("text-halo-blur-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? TextHaloBlurTransition { get; set; }
+
+    [JsonPropertyName("text-translate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? TextTranslateTransition { get; set; }
 }

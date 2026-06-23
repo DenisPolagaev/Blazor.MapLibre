@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Community.Blazor.MapLibre.Converter;
+using Community.Blazor.MapLibre.Models.Style;
 using OneOf;
 
 namespace Community.Blazor.MapLibre.Models.Layers;
@@ -12,16 +13,6 @@ public class FillLayer : Layer<FillLayerLayout, FillLayerPaint>
     /// </summary>
     [JsonPropertyName("source")]
     public required string Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the layer to use from a vector tile source.
-    /// </summary>
-    /// <remarks>
-    /// Required for vector tile sources. Specifies the layer within the vector tiles to use for this layer.
-    /// </remarks>
-    [JsonPropertyName("source-layer")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? SourceLayer { get; set; }
 }
 
 public class FillLayerLayout
@@ -327,10 +318,30 @@ public class FillLayerPaint
     public OneOf<double, JsonArray>? FillLayerOpacity { get; set; }
 
     /// <summary>
-    /// Controls the intensity of light emitted on the source features.
+    /// Mapbox-style extension; may be ignored by MapLibre GL JS. Controls emissive light intensity on source features.
     /// </summary>
     [JsonPropertyName("fill-emissive-strength")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(OneOfJsonConverter<double>))]
     public OneOf<double, JsonArray>? FillEmissiveStrength { get; set; }
+
+    [JsonPropertyName("fill-opacity-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillOpacityTransition { get; set; }
+
+    [JsonPropertyName("fill-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillColorTransition { get; set; }
+
+    [JsonPropertyName("fill-outline-color-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillOutlineColorTransition { get; set; }
+
+    [JsonPropertyName("fill-translate-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillTranslateTransition { get; set; }
+
+    [JsonPropertyName("fill-pattern-transition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StyleTransition? FillPatternTransition { get; set; }
 }

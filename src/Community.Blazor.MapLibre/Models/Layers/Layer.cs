@@ -11,6 +11,7 @@ namespace Community.Blazor.MapLibre.Models.Layers;
 [JsonDerivedType(typeof(BackgroundLayer), "background")]
 [JsonDerivedType(typeof(CircleLayer), "circle")]
 [JsonDerivedType(typeof(ColorReliefLayer), "color-relief")]
+[JsonDerivedType(typeof(CustomLayer), "custom")]
 [JsonDerivedType(typeof(FillExtrusionLayer), "fill-extrusion")]
 [JsonDerivedType(typeof(FillLayer), "fill")]
 [JsonDerivedType(typeof(HeatMapLayer), "heatmap")]
@@ -55,6 +56,13 @@ public abstract class Layer
     [JsonPropertyName("metadata")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public object? Metadata { get; set; }
+
+    /// <summary>
+    /// Layer slot for organizing layers in the style (MapLibre 5.x).
+    /// </summary>
+    [JsonPropertyName("slot")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Slot { get; set; }
 }
 
 public abstract class Layer<TLayout, TPaint> : Layer

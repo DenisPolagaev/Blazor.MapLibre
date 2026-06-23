@@ -177,4 +177,36 @@ public class LayerSerializationTests
         Assert.Contains("\"metadata\":", json);
         Assert.Contains("\"group\":\"test\"", json);
     }
+
+    [Fact]
+    public void CustomLayer_SerializesTypeDiscriminator()
+    {
+        var layer = new CustomLayer
+        {
+            Id = "threejs",
+            RenderingMode = "3d",
+            Slot = "bottom",
+        };
+
+        var json = JsonSerializer.Serialize<Layer>(layer);
+
+        Assert.Contains("\"type\":\"custom\"", json);
+        Assert.Contains("\"renderingMode\":\"3d\"", json);
+        Assert.Contains("\"slot\":\"bottom\"", json);
+    }
+
+    [Fact]
+    public void FillLayer_SerializesSourceLayerOnBaseClass()
+    {
+        var layer = new FillLayer
+        {
+            Id = "f",
+            Source = "geo",
+            SourceLayer = "buildings",
+        };
+
+        var json = JsonSerializer.Serialize(layer);
+
+        Assert.Contains("\"source-layer\":\"buildings\"", json);
+    }
 }
