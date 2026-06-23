@@ -24,6 +24,16 @@ Blazor.MapLibre follows Blazor's component-based architecture and makes the `Map
 - Integrates with Blazor's rendering and lifecycle management
 - Enables declarative map configuration through component parameters
 
+## Default map style
+
+`MapOptions.Style` defaults to `MapStyles.OpenStreetMap` (OSM raster tiles). Override it when you need vector styles or custom tile servers.
+
+See [Map API methods](../api/map/methods.md) for recently added wrappers (terrain, GeoJSON diff, time control, custom layers).
+
+## Layers and events
+
+Typed layer models mirror the [MapLibre style spec](https://maplibre.org/maplibre-style-spec/layers/). See [Layers overview](../api/layers/index.md) and [Events overview](../api/events/index.md).
+
 ## Plugin system
 
 The library features an extensible plugin system.
