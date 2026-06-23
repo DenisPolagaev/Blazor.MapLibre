@@ -15,5 +15,5 @@ public class MapMouseEvent : MapEvent
     public bool? DefaultPrevented { get; set; }
 
     [JsonPropertyName("features")]
-    public LayerFeature[] Features { get; set; } = [];
+    public LayerFeatureFeature[] Features { get; set; } = [];
 }

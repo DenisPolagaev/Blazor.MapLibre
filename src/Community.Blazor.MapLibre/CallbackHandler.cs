@@ -8,86 +8,107 @@ namespace Community.Blazor.MapLibre;
 /// </summary>
 public class CallbackHandler
 {
-    private readonly IJSObjectReference _jsRuntimeReference;
+    private readonly IJSObjectReference _jsModule;
+    private readonly string _mapId;
     private readonly string _eventType;
     private readonly Delegate _callbackDelegate;
     private readonly Type? _argumentType;
-    private static readonly JsonSerializerOptions Serializer = new()
+    private string? _listenerId;
+    private DotNetObjectReference<CallbackHandler>? _dotNetReference;
+    private bool _removed;
+
+    /// <summary>
+    /// Constructor for plugin modules that manage their own JavaScript listeners.
+    /// </summary>
+    public CallbackHandler(
+        IJSObjectReference jsModule,
+        string eventType,
+        Delegate callbackDelegate,
+        Type argumentType)
+        : this(jsModule, string.Empty, eventType, callbackDelegate, argumentType)
     {
-        AllowOutOfOrderMetadataProperties = true,
-        
-    };
+    }
 
     /// <summary>
     /// Constructor for initializing a callback handler with arguments.
     /// </summary>
-    /// <param name="jsRuntimeReference">Reference to the JavaScript runtime object.</param>
-    /// <param name="eventType">Type of the event (e.g., click, drag).</param>
-    /// <param name="callbackDelegate">The C# delegate to invoke when the event is triggered.</param>
-    /// <param name="argumentType">The type of the argument expected for the callback delegate.</param>
-    public CallbackHandler(IJSObjectReference jsRuntimeReference, string eventType, Delegate callbackDelegate, Type argumentType)
+    public CallbackHandler(
+        IJSObjectReference jsModule,
+        string mapId,
+        string eventType,
+        Delegate callbackDelegate,
+        Type argumentType)
     {
-        _jsRuntimeReference = jsRuntimeReference;
+        _jsModule = jsModule;
+        _mapId = mapId;
         _eventType = eventType;
         _callbackDelegate = callbackDelegate;
         _argumentType = argumentType;
     }
 
     /// <summary>
-    /// Constructor for initializing a callback handler without arguments.
+    /// Attaches the .NET reference and listener id returned from JavaScript registration.
     /// </summary>
-    /// <param name="jsRuntimeReference">Reference to the JavaScript runtime object.</param>
-    /// <param name="eventType">Type of the event (e.g., click, drag).</param>
-    /// <param name="callbackDelegate">The C# delegate to invoke when the event is triggered.</param>
-    public CallbackHandler(IJSObjectReference jsRuntimeReference, string eventType, Delegate callbackDelegate)
+    public void Attach(DotNetObjectReference<CallbackHandler> dotNetReference, string listenerId)
     {
-        _jsRuntimeReference = jsRuntimeReference;
-        _eventType = eventType;
-        _callbackDelegate = callbackDelegate;
+        _dotNetReference = dotNetReference;
+        _listenerId = listenerId;
     }
 
     /// <summary>
-    /// Removes the event listener in JavaScript (placeholder implementation).
+    /// Removes the event listener in JavaScript and disposes the .NET reference.
     /// </summary>
     public async Task RemoveAsync()
     {
-        await Task.CompletedTask; // Placeholder to maintain async signature.
+        if (_removed)
+        {
+            return;
+        }
+
+        _removed = true;
+
+        if (_listenerId is not null)
+        {
+            await _jsModule.InvokeVoidAsync("off", _mapId, _listenerId);
+            _listenerId = null;
+        }
+
+        _dotNetReference?.Dispose();
+        _dotNetReference = null;
     }
 
     /// <summary>
     /// Invokes the callback with arguments from JavaScript.
     /// </summary>
-    /// <param name="args">Serialized JSON arguments from JavaScript.</param>
     [JSInvokable]
     public async ValueTask Invoke(string args)
     {
         if (string.IsNullOrWhiteSpace(args) || _argumentType is null)
         {
-            var returnObject = _callbackDelegate.DynamicInvoke(); // Invoke delegate without arguments.
+            var returnObject = _callbackDelegate.DynamicInvoke();
 
             if (returnObject is Task task)
             {
-                await task; // Await if the return type is a Task.
+                await task;
             }
+
             return;
         }
 
         object? deserializedArgs;
         if (_argumentType == typeof(string))
         {
-            // JS passes JSON.stringify(payload); for string handlers the payload is already the final value.
             deserializedArgs = args;
         }
         else
         {
-            deserializedArgs = JsonSerializer.Deserialize(args, _argumentType, Serializer);
+            deserializedArgs = JsonSerializer.Deserialize(args, _argumentType, MapLibreJsonSerializer.Options);
         }
 
-        // Invoke delegate with deserialized arguments.
         var returnObjectWithArgs = _callbackDelegate.DynamicInvoke(deserializedArgs);
         if (returnObjectWithArgs is Task callbackTaskWithArgs)
         {
-            await callbackTaskWithArgs; // Await if the return type is a Task.
+            await callbackTaskWithArgs;
         }
     }
 }
