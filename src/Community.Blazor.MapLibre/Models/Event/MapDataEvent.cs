@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Community.Blazor.MapLibre.Models;
 
 namespace Community.Blazor.MapLibre.Models.Event;
 
@@ -16,6 +17,12 @@ public class MapDataEvent : MapEvent
     [JsonPropertyName("sourceDataType")]
     public string? SourceDataType { get; set; }
 
+    [JsonPropertyName("sourceDataChanged")]
+    public bool? SourceDataChanged { get; set; }
+
+    [JsonPropertyName("source")]
+    public object? Source { get; set; }
+
     [JsonPropertyName("tile")]
-    public object? Tile { get; set; }
+    public TileId? Tile { get; set; }
 }

@@ -10,6 +10,12 @@ public class MapEventNamesTests
     [InlineData(nameof(MapEventNames.MoveEnd), "moveend")]
     [InlineData(nameof(MapEventNames.StyleLoad), "style.load")]
     [InlineData(nameof(MapEventNames.SourceData), "sourcedata")]
+    [InlineData(nameof(MapEventNames.StyleDataLoading), "styledataloading")]
+    [InlineData(nameof(MapEventNames.SourceDataLoading), "sourcedataloading")]
+    [InlineData(nameof(MapEventNames.SourceDataAbort), "sourcedataabort")]
+    [InlineData(nameof(MapEventNames.CooperativeGesturePrevented), "cooperativegestureprevented")]
+    [InlineData(nameof(MapEventNames.ProjectionTransition), "projectiontransition")]
+    [InlineData(nameof(MapEventNames.Terrain), "terrain")]
     [InlineData(nameof(MapEventNames.WebGlContextLost), "webglcontextlost")]
     public void MapEventNames_MatchMapLibreValues(string propertyName, string expected)
     {

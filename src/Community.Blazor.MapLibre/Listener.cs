@@ -3,7 +3,7 @@ namespace Community.Blazor.MapLibre;
 /// <summary>
 /// Represents a listener that handles the removal of a registered event listener.
 /// </summary>
-public class Listener(CallbackHandler action) : IAsyncDisposable, IDisposable
+public sealed class Listener(CallbackHandler action) : IAsyncDisposable
 {
     public async Task Remove()
     {
@@ -13,10 +13,5 @@ public class Listener(CallbackHandler action) : IAsyncDisposable, IDisposable
     public async ValueTask DisposeAsync()
     {
         await action.RemoveAsync();
-    }
-
-    public void Dispose()
-    {
-        Remove().GetAwaiter().GetResult();
     }
 }

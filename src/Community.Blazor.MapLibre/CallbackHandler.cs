@@ -15,7 +15,13 @@ public class CallbackHandler
     private readonly Type? _argumentType;
     private string? _listenerId;
     private DotNetObjectReference<CallbackHandler>? _dotNetReference;
+    private Action<string>? _onRemoved;
     private bool _removed;
+
+    /// <summary>
+    /// The MapLibre event name this handler is registered for.
+    /// </summary>
+    public string EventType => _eventType;
 
     /// <summary>
     /// Constructor for plugin modules that manage their own JavaScript listeners.
@@ -49,10 +55,11 @@ public class CallbackHandler
     /// <summary>
     /// Attaches the .NET reference and listener id returned from JavaScript registration.
     /// </summary>
-    public void Attach(DotNetObjectReference<CallbackHandler> dotNetReference, string listenerId)
+    public void Attach(DotNetObjectReference<CallbackHandler> dotNetReference, string listenerId, Action<string>? onRemoved = null)
     {
         _dotNetReference = dotNetReference;
         _listenerId = listenerId;
+        _onRemoved = onRemoved;
     }
 
     /// <summary>
@@ -69,7 +76,9 @@ public class CallbackHandler
 
         if (_listenerId is not null)
         {
-            await _jsModule.InvokeVoidAsync("off", _mapId, _listenerId);
+            var removedId = _listenerId;
+            await _jsModule.InvokeVoidAsync("off", _mapId, removedId);
+            _onRemoved?.Invoke(removedId);
             _listenerId = null;
         }
 

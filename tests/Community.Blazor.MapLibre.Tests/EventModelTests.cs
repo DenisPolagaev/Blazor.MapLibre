@@ -67,5 +67,99 @@ public class EventModelTests
         Assert.NotNull(evt);
         Assert.Equal(EventType.Error, evt!.Type);
         Assert.NotNull(evt.Error);
+        Assert.Equal("test", evt.Error!.Message);
+    }
+
+    [Fact]
+    public void MapTouchEvent_DeserializesMultiTouchPoints()
+    {
+        const string json = """
+            {
+              "type": "touchstart",
+              "point": { "x": 1, "y": 2 },
+              "lngLat": { "lng": 10, "lat": 20 },
+              "points": [{ "x": 1, "y": 2 }, { "x": 3, "y": 4 }],
+              "lngLats": [{ "lng": 10, "lat": 20 }, { "lng": 11, "lat": 21 }]
+            }
+            """;
+
+        var evt = JsonSerializer.Deserialize<MapTouchEvent>(json, MapLibreJsonSerializer.Options);
+
+        Assert.NotNull(evt);
+        Assert.Equal(EventType.TouchStart, evt!.Type);
+        Assert.Equal(2, evt.Points.Length);
+        Assert.Equal(2, evt.LngLats.Length);
+    }
+
+    [Fact]
+    public void MapWheelEvent_DeserializesWithoutPoint()
+    {
+        const string json = """{ "type": "wheel", "deltaY": -120, "deltaX": 0 }""";
+
+        var evt = JsonSerializer.Deserialize<MapWheelEvent>(json, MapLibreJsonSerializer.Options);
+
+        Assert.NotNull(evt);
+        Assert.Equal(EventType.Wheel, evt!.Type);
+        Assert.Equal(-120, evt.DeltaY);
+    }
+
+    [Fact]
+    public void MapDataEvent_DeserializesSourceDataChanged()
+    {
+        const string json = """
+            {
+              "type": "sourcedata",
+              "dataType": "source",
+              "sourceId": "terrain",
+              "sourceDataChanged": true,
+              "tile": { "x": 1, "y": 2, "z": 3 }
+            }
+            """;
+
+        var evt = JsonSerializer.Deserialize<MapDataEvent>(json, MapLibreJsonSerializer.Options);
+
+        Assert.NotNull(evt);
+        Assert.True(evt!.SourceDataChanged);
+        Assert.NotNull(evt.Tile);
+        Assert.Equal(3u, evt.Tile!.Z);
+    }
+
+    [Fact]
+    public void MapDomEvent_DeserializesFromOriginalEvent()
+    {
+        const string json = """
+            {
+              "type": "click",
+              "point": { "x": 1, "y": 2 },
+              "lngLat": { "lng": 10, "lat": 20 },
+              "originalEvent": {
+                "type": "click",
+                "button": 0,
+                "ctrlKey": true,
+                "clientX": 100,
+                "clientY": 200
+              }
+            }
+            """;
+
+        var evt = JsonSerializer.Deserialize<MapMouseEvent>(json, MapLibreJsonSerializer.Options);
+
+        Assert.NotNull(evt);
+        var dom = evt!.GetOriginalDomEvent();
+        Assert.NotNull(dom);
+        Assert.Equal(0, dom!.Button);
+        Assert.True(dom.CtrlKey);
+        Assert.Equal(100, dom.ClientX);
+    }
+
+    [Fact]
+    public void MapZoomEvent_DeserializesBoxZoom()
+    {
+        const string json = """{ "type": "boxzoomend" }""";
+
+        var evt = JsonSerializer.Deserialize<MapZoomEvent>(json, MapLibreJsonSerializer.Options);
+
+        Assert.NotNull(evt);
+        Assert.Equal(EventType.BoxZoomEnd, evt!.Type);
     }
 }

@@ -17,6 +17,7 @@ public static class MapEventNames
     public const string StyleDataLoading = "styledataloading";
     public const string SourceData = "sourcedata";
     public const string SourceDataLoading = "sourcedataloading";
+    public const string SourceDataAbort = "sourcedataabort";
     public const string DataLoading = "dataloading";
     public const string Data = "data";
     public const string DataAbort = "dataabort";
@@ -64,4 +65,8 @@ public static class MapEventNames
 
     public const string WebGlContextLost = "webglcontextlost";
     public const string WebGlContextRestored = "webglcontextrestored";
+
+    public const string CooperativeGesturePrevented = "cooperativegestureprevented";
+    public const string ProjectionTransition = "projectiontransition";
+    public const string Terrain = "terrain";
 }

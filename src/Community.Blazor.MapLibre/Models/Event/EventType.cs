@@ -121,6 +121,9 @@ public enum EventType
     [JsonStringEnumMemberName("sourcedataloading")]
     SourceDataLoading,
 
+    [JsonStringEnumMemberName("sourcedataabort")]
+    SourceDataAbort,
+
     [JsonStringEnumMemberName("dataloading")]
     DataLoading,
 
@@ -162,4 +165,13 @@ public enum EventType
 
     [JsonStringEnumMemberName("webglcontextrestored")]
     WebGlContextRestored,
+
+    [JsonStringEnumMemberName("cooperativegestureprevented")]
+    CooperativeGesturePrevented,
+
+    [JsonStringEnumMemberName("projectiontransition")]
+    ProjectionTransition,
+
+    [JsonStringEnumMemberName("terrain")]
+    Terrain,
 }
