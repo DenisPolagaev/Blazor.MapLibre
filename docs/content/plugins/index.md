@@ -14,7 +14,7 @@ For architecture context, see [Key concepts — Plugin system](../getting-starte
 
 | Plugin | Package / project | Description |
 | --- | --- | --- |
-| [Terra Draw](./terra-draw-plugin.md) | `Community.Blazor.MapLibre.TerraDrawPlugin` | Draw and edit geometries with [Terra Draw](https://github.com/JamesLMilner/terra-draw) |
+| [Terra Draw](./terra-draw-plugin.md) | `Community.Blazor.MapLibre.TerraDrawPlugin` | Draw, measure, and Valhalla toolbars via [maplibre-gl-terradraw](https://github.com/watergis/maplibre-gl-terradraw) |
 | [Map Compare](./map-compare-plugin.md) | `Community.Blazor.MapLibre.ComparePlugin` | Swipe slider to compare two maps with [maplibre-gl-compare](https://github.com/maplibre/maplibre-gl-compare) |
 | [Minimap](./minimap-plugin.md) | `Community.Blazor.MapLibre.MinimapPlugin` | Overview map with viewport rectangle ([mapboxgl-minimap](https://github.com/aesqe/mapboxgl-minimap)) |
 | [Frame rate](./framerate-plugin.md) | `Community.Blazor.MapLibre.FrameratePlugin` | Live FPS overlay while the map moves ([mapbox-gl-framerate](https://github.com/mapbox/mapbox-gl-framerate)) |

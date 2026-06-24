@@ -2,6 +2,7 @@
 
 @using Community.Blazor.MapLibre.TerraDrawPlugin
 @using Community.Blazor.MapLibre.Models
+@using Community.Blazor.MapLibre.Models.Control
 @using System.Text.Json
 
 <ViewOnGitHub FilePath="examples/Community.Blazor.MapLibre.Examples/Examples/TerraDraw.razor"/>
@@ -14,12 +15,12 @@
 </MapLibre>
 
 <div class="d-flex flex-wrap gap-2 mt-3">
-    @foreach (var mode in _modes)
-    {
-        <button class="btn btn-sm btn-outline-primary" @onclick="() => SetMode(mode)">
-            @mode
-        </button>
-    }
+    <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleToolbar">
+        @( _expanded ? "Collapse toolbar" : "Expand toolbar" )
+    </button>
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => SetMode(TerradrawModes.Rectangle)">Rectangle</button>
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => SetMode(TerradrawModes.Circle)">Circle</button>
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => SetMode(TerradrawModes.Select)">Select</button>
     <button class="btn btn-sm btn-outline-secondary" @onclick="FinishGeometry">Finish</button>
     <button class="btn btn-sm btn-outline-danger" @onclick="StopDrawing">Stop</button>
 </div>
@@ -30,7 +31,8 @@
     private MapLibre _map = new();
     private TerraDrawPlugin _terraDraw = new();
     private Listener? _changeListener;
-    private string _geoJsonSnapshot = "Draw on the map to see GeoJSON here.";
+    private string _geoJsonSnapshot = "Draw on the map using the Terra Draw toolbar.";
+    private bool _expanded = true;
 
     private readonly MapOptions _mapOptions = new()
     {
@@ -38,8 +40,6 @@
         Center = new LngLat(-73.99, 40.75),
         Zoom = 11,
     };
-
-    private readonly string[] _modes = ["point", "linestring", "polygon", "select", "delete"];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -51,8 +51,21 @@
 
     private async Task OnMapLoad(EventArgs _)
     {
-        await _terraDraw.AddTerraDrawToolAsync();
-        await _terraDraw.SetTerraDrawModeAsync("polygon");
+        await _terraDraw.AddDrawControlAsync(new TerradrawControlOptions
+        {
+            Open = true,
+            Modes =
+            [
+                TerradrawModes.Point,
+                TerradrawModes.LineString,
+                TerradrawModes.Polygon,
+                TerradrawModes.Rectangle,
+                TerradrawModes.Circle,
+                TerradrawModes.Select,
+                TerradrawModes.Delete,
+            ],
+        }, ControlPosition.TopLeft);
+
         await _terraDraw.DisableMapZoomGesturesAsync();
 
         _changeListener = await _terraDraw.AddTerraDrawChangeListener<string>(OnGeometriesChanged, 150);
@@ -64,19 +77,19 @@
         StateHasChanged();
     }
 
-    private async Task SetMode(string mode)
+    private async Task ToggleToolbar()
     {
-        await _terraDraw.SetTerraDrawModeAsync(mode);
+        _expanded = !_expanded;
+        await _terraDraw.SetControlExpandedAsync(_expanded);
     }
 
-    private async Task FinishGeometry()
-    {
-        await _terraDraw.FinishGeometryAsync();
-    }
+    private async Task SetMode(string mode) => await _terraDraw.SetModeAsync(mode);
+
+    private async Task FinishGeometry() => await _terraDraw.FinishGeometryAsync();
 
     private async Task StopDrawing()
     {
-        await _terraDraw.StopTerraDrawAsync();
+        await _terraDraw.StopDrawingAsync();
         _geoJsonSnapshot = "Drawing stopped.";
     }
 
