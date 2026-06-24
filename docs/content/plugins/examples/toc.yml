@@ -1,0 +1,13 @@
+# This is an automatically generated file
+- name: Plugin examples
+  href: index.md
+- name: Terra Draw
+  href: terra-draw.md
+- name: Map Compare
+  href: map-compare.md
+- name: Minimap
+  href: minimap.md
+- name: Frame rate
+  href: framerate.md
+- name: Mapbox GL Draw
+  href: mapbox-gl-draw.md

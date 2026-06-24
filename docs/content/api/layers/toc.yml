@@ -1,0 +1,23 @@
+# This is an automatically generated file
+- name: Layers overview
+  href: index.md
+- name: Background layer
+  href: background.md
+- name: Circle layer
+  href: circle.md
+- name: Color relief layer
+  href: color-relief.md
+- name: Fill extrusion layer
+  href: fill-extrusion.md
+- name: Fill layer
+  href: fill.md
+- name: Heatmap layer
+  href: heatmap.md
+- name: Hillshade layer
+  href: hillshade.md
+- name: Line layer
+  href: line.md
+- name: Raster layer
+  href: raster.md
+- name: Symbol layer
+  href: symbol.md

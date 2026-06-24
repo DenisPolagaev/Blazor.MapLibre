@@ -1,0 +1,11 @@
+# This is an automatically generated file
+- name: API
+  href: index.md
+- name: Events overview
+  href: events/toc.yml
+- name: Handlers
+  href: handlers/toc.yml
+- name: Layers overview
+  href: layers/toc.yml
+- name: Map
+  href: map/toc.yml

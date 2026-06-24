@@ -1,0 +1,39 @@
+# This is an automatically generated file
+- name: Add listener
+  href: add-listener.md
+- name: Add marker
+  href: add-marker.md
+- name: Add popup
+  href: add-popup.md
+- name: Circle layer
+  href: circle-layer.md
+- name: Color relief terrain
+  href: color-relief-terrain.md
+- name: Fill extrusion
+  href: fill-extrusion.md
+- name: Fit bounds
+  href: fit-bounds.md
+- name: Global state visibility
+  href: global-state-visibility.md
+- name: Globe and atmosphere
+  href: globe-atmosphere.md
+- name: Hillshade and terrain
+  href: hillshade-terrain.md
+- name: Line layer
+  href: line-layer.md
+- name: Load GeoJSON
+  href: load-geojson.md
+- name: Map events
+  href: map-events.md
+- name: Multiple maps
+  href: multiple-maps.md
+- name: Raster styling
+  href: raster-styling.md
+- name: Render globe
+  href: render-globe.md
+- name: Sky, fog and terrain
+  href: sky-fog-terrain.md
+- name: Symbol labels
+  href: symbol-labels.md
+- name: Update GeoJSON with diff
+  href: update-geojson-diff.md

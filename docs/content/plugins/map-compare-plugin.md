@@ -100,4 +100,4 @@ await _compare.CreateAsync("before", "after", "#comparison-container", new Compa
 
 ## Live demo
 
-Run the examples site and open **Map Compare**, or use the `<map-compare></map-compare>` custom element on the documentation site.
+Run the examples site and open **Map Compare**, or see the [Map Compare example](./examples/map-compare.md) on the documentation site.

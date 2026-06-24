@@ -4,6 +4,9 @@
 - name: Getting started
   href: getting-started/toc.yml
 
+- name: Plugins
+  href: plugins/toc.yml
+
 - name: Examples
   href: examples/toc.yml
 

@@ -14,19 +14,27 @@
         <RemoveDir Directories="bin"/>
     </Target>
 
-    <Target Name="IntallTools" AfterTargets="AfterBuild">
+    <ItemGroup>
+        <DocContent Include="content/**/*.md;content/**/*.yml;content/**/.order;index.md;toc.yml;docfx.json" />
+    </ItemGroup>
+
+    <Target Name="IntallTools" AfterTargets="Build">
         <Exec Command="dotnet tool restore"/>
     </Target>
 
-    <Target Name="BuildTableOfContents" AfterTargets="AfterBuild">
+    <Target Name="BuildTableOfContents" AfterTargets="Build">
         <Exec Command="dotnet DocFxTocGenerator --docfolder ./content/getting-started --outfolder ./content/getting-started --sequence --override"/>
+        <Exec Command="dotnet DocFxTocGenerator --docfolder ./content/plugins --outfolder ./content/plugins --sequence --override -m 2"/>
         <Exec Command="dotnet DocFxTocGenerator --docfolder ./content/examples --outfolder ./content/examples --sequence --override"/>
-        <Exec Command="dotnet DocFxTocGenerator --docfolder ./content/api --outfolder ./content/api --sequence --override"/>
+        <Exec Command="dotnet DocFxTocGenerator --docfolder ./content/api --outfolder ./content/api --sequence --override -m 2"/>
     </Target>
 
-    <Target Name="BuildSite" AfterTargets="AfterBuild">
+    <Target Name="BuildSite" AfterTargets="BuildTableOfContents">
         <Exec Command="dotnet docfx docfx.json --output $(OutputPath)/dist"/>
     </Target>
+
+    <!-- Rebuild docs when only markdown changes and the user runs the docs project. -->
+    <Target Name="PrepareDocSiteForRun" BeforeTargets="Run" DependsOnTargets="BuildTableOfContents;BuildSite"/>
 
     <Target Name="PublishExampleComponentsToDocsSite" AfterTargets="BuildSite">
         <PropertyGroup>

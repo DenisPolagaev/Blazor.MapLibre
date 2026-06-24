@@ -1,0 +1,9 @@
+# This is an automatically generated file
+- name: Introduction
+  href: introduction.md
+- name: Key concepts
+  href: key-concepts.md
+- name: Contributing
+  href: contributing.md
+- name: MLT vector tiles
+  href: mlt-vector-tiles.md

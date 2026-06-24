@@ -42,3 +42,7 @@ You can customize the map more with options using `MapOptions.cs`:
     private readonly MapOptions _mapOptions = new MapOptions();
 }
 ```
+
+## Plugins
+
+Optional map extensions (Terra Draw, Map Compare, Minimap, Frame rate, and more) live in the [Plugins](content/plugins/index.md) section. See [Creating a plugin](content/plugins/create-a-plugin.md) to build your own.

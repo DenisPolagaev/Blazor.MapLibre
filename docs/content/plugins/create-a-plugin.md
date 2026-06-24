@@ -140,4 +140,6 @@ The repository includes plugin projects you can use as starting points:
 
 - [Terra Draw plugin](./terra-draw-plugin.md) — drawing and geometry editing with Terra Draw
 - [Map Compare plugin](./map-compare-plugin.md) — swipe and sync between two maps with [maplibre-gl-compare](https://github.com/maplibre/maplibre-gl-compare)
-- Mapbox GL Draw — see `examples/Community.Blazor.MapLibre.Examples.MapboxGlPlugin`
+- [Minimap plugin](./minimap-plugin.md) — overview minimap control ([mapboxgl-minimap](https://github.com/aesqe/mapboxgl-minimap))
+- [Frame rate plugin](./framerate-plugin.md) — rendering performance overlay ([mapbox-gl-framerate](https://github.com/mapbox/mapbox-gl-framerate))
+- [Mapbox GL Draw plugin](./mapbox-gl-draw-plugin.md) — reference plugin in the examples solution

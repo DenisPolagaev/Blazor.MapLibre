@@ -1,0 +1,17 @@
+# This is an automatically generated file
+- name: Plugins
+  href: index.md
+- name: Creating a plugin
+  href: create-a-plugin.md
+- name: Terra Draw plugin
+  href: terra-draw-plugin.md
+- name: Map Compare plugin
+  href: map-compare-plugin.md
+- name: Minimap plugin
+  href: minimap-plugin.md
+- name: Frame rate plugin
+  href: framerate-plugin.md
+- name: Mapbox GL Draw plugin
+  href: mapbox-gl-draw-plugin.md
+- name: Plugin examples
+  href: examples/toc.yml
