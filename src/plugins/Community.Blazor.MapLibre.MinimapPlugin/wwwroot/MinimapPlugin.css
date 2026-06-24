@@ -1,0 +1,26 @@
+.maplibregl-ctrl-minimap {
+    margin: 0 10px 10px 10px;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+    position: relative;
+    isolation: isolate;
+}
+
+.maplibregl-ctrl-minimap .maplibregl-map,
+.maplibregl-ctrl-minimap .maplibregl-canvas-container,
+.maplibregl-ctrl-minimap canvas {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden;
+}
+
+.maplibregl-ctrl-top-right .maplibregl-ctrl-minimap,
+.maplibregl-ctrl-top-left .maplibregl-ctrl-minimap {
+    margin-top: 10px;
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-minimap,
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl-minimap {
+    margin-bottom: 10px;
+}

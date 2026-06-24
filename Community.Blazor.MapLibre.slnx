@@ -22,6 +22,8 @@
   <Folder Name="/src/plugins/">
     <Project Path="src\plugins\Community.Blazor.MapLibre.TerraDrawPlugin\Community.Blazor.MapLibre.TerraDrawPlugin.csproj" Type="Classic C#" />
     <Project Path="src\plugins\Community.Blazor.MapLibre.ComparePlugin\Community.Blazor.MapLibre.ComparePlugin.csproj" Type="Classic C#" />
+    <Project Path="src\plugins\Community.Blazor.MapLibre.MinimapPlugin\Community.Blazor.MapLibre.MinimapPlugin.csproj" Type="Classic C#" />
+    <Project Path="src\plugins\Community.Blazor.MapLibre.FrameratePlugin\Community.Blazor.MapLibre.FrameratePlugin.csproj" Type="Classic C#" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests\Community.Blazor.MapLibre.Tests\Community.Blazor.MapLibre.Tests.csproj" Type="Classic C#" />

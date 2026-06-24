@@ -1,0 +1,9 @@
+.maplibregl-ctrl-fps {
+    margin: 10px;
+    padding-top: 5px;
+    min-width: 90px;
+}
+
+.maplibregl-ctrl-fps .maplibregl-ctrl-canvas {
+    display: block;
+}

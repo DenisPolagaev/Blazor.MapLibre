@@ -24,6 +24,8 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Community.Blazor.MapLibre\Community.Blazor.MapLibre.csproj" />
+        <ProjectReference Include="..\..\src\plugins\Community.Blazor.MapLibre.MinimapPlugin\Community.Blazor.MapLibre.MinimapPlugin.csproj" />
+        <ProjectReference Include="..\..\src\plugins\Community.Blazor.MapLibre.FrameratePlugin\Community.Blazor.MapLibre.FrameratePlugin.csproj" />
     </ItemGroup>
 
 </Project>

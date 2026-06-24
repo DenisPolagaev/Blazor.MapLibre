@@ -31,5 +31,7 @@ builder.RootComponents.RegisterCustomElement<SymbolLabels>("symbol-labels");
 builder.RootComponents.RegisterCustomElement<SkyFogTerrain>("sky-fog-terrain");
 builder.RootComponents.RegisterCustomElement<GlobeAtmosphere>("globe-atmosphere");
 builder.RootComponents.RegisterCustomElement<ColorReliefTerrain>("color-relief-terrain");
+builder.RootComponents.RegisterCustomElement<Minimap>("map-minimap");
+builder.RootComponents.RegisterCustomElement<Framerate>("map-framerate");
 
 await builder.Build().RunAsync();
