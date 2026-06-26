@@ -289,38 +289,52 @@ class GeoGrid {
             return;
         }
 
-        if (this.map[geoGridKey] === this) {
-            delete this.map[geoGridKey];
-        }
+        try {
+            if (this.map[geoGridKey] === this) {
+                delete this.map[geoGridKey];
+            }
 
-        this.map.off('remove', this.removeEventListeners);
-        this.removeEventListeners();
-        this.removeLabels();
+            this.map.off('remove', this.removeEventListeners);
+            this.removeEventListeners();
+            this.removeLabels();
 
-        const labelsContainer = this.elements.labelsContainer;
-        if (labelsContainer?.parentNode) {
-            labelsContainer.remove();
-        }
+            const labelsContainer = this.elements.labelsContainer;
+            if (labelsContainer?.parentNode) {
+                labelsContainer.remove();
+            }
 
-        if (this.map.getLayer(this.config.parallersLayerName)) {
-            this.map.removeLayer(this.config.parallersLayerName);
-        }
+            if (typeof this.map.isStyleLoaded === 'function' && this.map.isStyleLoaded()) {
+                if (this.map.getLayer(this.config.parallersLayerName)) {
+                    this.map.removeLayer(this.config.parallersLayerName);
+                }
 
-        if (this.map.getLayer(this.config.meridiansLayerName)) {
-            this.map.removeLayer(this.config.meridiansLayerName);
-        }
+                if (this.map.getLayer(this.config.meridiansLayerName)) {
+                    this.map.removeLayer(this.config.meridiansLayerName);
+                }
 
-        if (this.map.getSource(this.config.parallersSourceName)) {
-            this.map.removeSource(this.config.parallersSourceName);
-        }
+                if (this.map.getSource(this.config.parallersSourceName)) {
+                    this.map.removeSource(this.config.parallersSourceName);
+                }
 
-        if (this.map.getSource(this.config.meridiansSourceName)) {
-            this.map.removeSource(this.config.meridiansSourceName);
+                if (this.map.getSource(this.config.meridiansSourceName)) {
+                    this.map.removeSource(this.config.meridiansSourceName);
+                }
+            }
+        } catch {
+            // Map may already be destroyed during navigation/disposal.
         }
     };
     removeEventListeners = () => {
-        this.map.off('move', this.onMove);
-        this.map.off('projectiontransition', this.onProjectionTransition);
+        if (!this.map) {
+            return;
+        }
+
+        try {
+            this.map.off('move', this.onMove);
+            this.map.off('projectiontransition', this.onProjectionTransition);
+        } catch {
+            // Map may already be destroyed during navigation/disposal.
+        }
     };
     onMove = () => {
         this.updateLabelsVisibility();
@@ -516,7 +530,11 @@ class GeoGrid {
 }
 
 export function detachGeoGrid(map) {
-    map?.[geoGridKey]?.remove();
+    try {
+        map?.[geoGridKey]?.remove();
+    } catch {
+        // Map may already be destroyed during navigation/disposal.
+    }
 }
 
 export { GeoGrid };

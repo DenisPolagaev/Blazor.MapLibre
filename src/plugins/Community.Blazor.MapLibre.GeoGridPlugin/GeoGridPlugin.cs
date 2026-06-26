@@ -94,6 +94,7 @@ public sealed class GeoGridPlugin : IMapLibrePlugin
         }
         catch (JSDisconnectedException) { }
         catch (ObjectDisposedException) { }
+        catch (JSException) { }
         finally
         {
             _pluginJsModule = null;
