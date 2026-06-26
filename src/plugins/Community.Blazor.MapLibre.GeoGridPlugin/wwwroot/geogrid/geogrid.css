@@ -1,0 +1,17 @@
+
+.geogrid .geogrid__label {}
+
+.geogrid  .geogrid__label--top,
+.geogrid .geogrid__label--bottom {
+    transform: translateX(-50%);
+}
+
+.geogrid .geogrid__label--left {
+    padding-left: 4px;
+    transform: translateY(-50%);
+}
+
+.geogrid .geogrid__label--right {
+    padding-right: 4px;
+    transform: translateY(-50%);
+}

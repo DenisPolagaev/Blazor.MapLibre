@@ -19,6 +19,7 @@
         <ProjectReference Include="..\..\src\plugins\Community.Blazor.MapLibre.TerraDrawPlugin\Community.Blazor.MapLibre.TerraDrawPlugin.csproj"/>
         <ProjectReference Include="..\..\src\plugins\Community.Blazor.MapLibre.MinimapPlugin\Community.Blazor.MapLibre.MinimapPlugin.csproj"/>
         <ProjectReference Include="..\..\src\plugins\Community.Blazor.MapLibre.FrameratePlugin\Community.Blazor.MapLibre.FrameratePlugin.csproj"/>
+        <ProjectReference Include="..\..\src\plugins\Community.Blazor.MapLibre.GeoGridPlugin\Community.Blazor.MapLibre.GeoGridPlugin.csproj"/>
     </ItemGroup>
     <ItemGroup>
       <_ContentIncludedByDefault Remove="wwwroot\sample-data\weather.json" />
