@@ -2052,7 +2052,7 @@ function getPopup(popupId) {
 }
 
 function removeMarkerListeners(markerId) {
-    for (const [listenerId, entry] of markerListenerRegistry.entries()) {
+    for (const [listenerId, entry] of Object.entries(markerListenerRegistry)) {
         if (entry.markerId === markerId) {
             markerOff(listenerId);
         }
@@ -2060,7 +2060,7 @@ function removeMarkerListeners(markerId) {
 }
 
 function removePopupListeners(popupId) {
-    for (const [listenerId, entry] of popupListenerRegistry.entries()) {
+    for (const [listenerId, entry] of Object.entries(popupListenerRegistry)) {
         if (entry.popupId === popupId) {
             popupOff(listenerId);
         }
