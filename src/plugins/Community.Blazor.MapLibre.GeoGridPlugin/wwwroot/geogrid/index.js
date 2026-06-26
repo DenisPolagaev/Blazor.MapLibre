@@ -3,6 +3,7 @@ const MAX_LATTITUDE = 90;
 const MAX_LONGITUDE = 180;
 const MIN_LONGITUDE = -180;
 const PLUGIN_PREFIX = 'geo-grid';
+const geoGridKey = Symbol('community.blazor.maplibre.geogrid');
 const classnames = {
     container: 'geogrid',
     containerOverride: 'geogrid-overrides',
@@ -248,40 +249,74 @@ class GeoGrid {
         this.config.labelStyle.textShadow = options.labelStyle?.textShadow;
         this.config.formatLabels = options.formatLabels || this.config.formatLabels;
         this.config.gridDensity = options.gridDensity || this.config.gridDensity;
-        this.map.once('load', this.add);
+
+        this.map[geoGridKey]?.remove();
+        this.map[geoGridKey] = this;
     }
     /**
-    * Adds grid back to the map.
-    * You only need to call this function if remove() was called.
+    * Adds grid to the map. Call after the map style is loaded.
     */
     add = () => {
-        const labelsContainer = this.map.getContainer().querySelector(`.${classnames.container}`);
-        if (labelsContainer) {
-            return;
+        const mapContainer = this.map.getContainer();
+        mapContainer.querySelectorAll(`.${classnames.container}`).forEach((element) => {
+            if (element !== this.elements.labelsContainer) {
+                element.remove();
+            }
+        });
+
+        if (!mapContainer.contains(this.elements.labelsContainer)) {
+            mapContainer.appendChild(this.elements.labelsContainer);
+            this.map.on('move', this.onMove);
+            this.map.on('remove', this.removeEventListeners);
+            this.map.on('projectiontransition', this.onProjectionTransition);
         }
-        this.map.getContainer().appendChild(this.elements.labelsContainer);
-        this.map.on('move', this.onMove);
-        this.map.on('remove', this.removeEventListeners);
-        this.map.on('projectiontransition', this.onProjectionTransition);
+
         const densityInDegrees = this.config.gridDensity(
         // Zoom can be negative in the globe projection, so we clamp it
         Math.max(Math.floor(this.map.getZoom()), 0));
-        this.addLayersAndSources(densityInDegrees);
+
+        if (!this.map.getLayer(this.config.parallersLayerName)) {
+            this.addLayersAndSources(densityInDegrees);
+        } else {
+            this.onMove();
+        }
     };
     /**
      * Removes grid from the map.
      */
     remove = () => {
+        if (!this.map) {
+            return;
+        }
+
+        if (this.map[geoGridKey] === this) {
+            delete this.map[geoGridKey];
+        }
+
         this.map.off('remove', this.removeEventListeners);
         this.removeEventListeners();
-        // Remove html elements
         this.removeLabels();
-        this.map.getContainer().removeChild(this.elements.labelsContainer);
-        // Remove layers and sources
-        this.map.removeLayer(this.config.parallersLayerName);
-        this.map.removeLayer(this.config.meridiansLayerName);
-        this.map.removeSource(this.config.parallersSourceName);
-        this.map.removeSource(this.config.meridiansSourceName);
+
+        const labelsContainer = this.elements.labelsContainer;
+        if (labelsContainer?.parentNode) {
+            labelsContainer.remove();
+        }
+
+        if (this.map.getLayer(this.config.parallersLayerName)) {
+            this.map.removeLayer(this.config.parallersLayerName);
+        }
+
+        if (this.map.getLayer(this.config.meridiansLayerName)) {
+            this.map.removeLayer(this.config.meridiansLayerName);
+        }
+
+        if (this.map.getSource(this.config.parallersSourceName)) {
+            this.map.removeSource(this.config.parallersSourceName);
+        }
+
+        if (this.map.getSource(this.config.meridiansSourceName)) {
+            this.map.removeSource(this.config.meridiansSourceName);
+        }
     };
     removeEventListeners = () => {
         this.map.off('move', this.onMove);
@@ -478,6 +513,10 @@ class GeoGrid {
         const y = this.map.project([edgeIntersectionLng, currentLatitude]).y;
         return createLabelElement(currentLatitude, x, y, 'right', this.config.formatLabels, this.config.labelStyle);
     }
+}
+
+export function detachGeoGrid(map) {
+    map?.[geoGridKey]?.remove();
 }
 
 export { GeoGrid };

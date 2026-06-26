@@ -9,5 +9,7 @@
   href: minimap.md
 - name: Frame rate
   href: framerate.md
+- name: Geo grid
+  href: geogrid.md
 - name: Mapbox GL Draw
   href: mapbox-gl-draw.md

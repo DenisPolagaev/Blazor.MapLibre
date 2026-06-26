@@ -4,5 +4,6 @@ terra-draw-plugin
 map-compare-plugin
 minimap-plugin
 framerate-plugin
+geogrid-plugin
 mapbox-gl-draw-plugin
 examples

@@ -142,4 +142,5 @@ The repository includes plugin projects you can use as starting points:
 - [Map Compare plugin](./map-compare-plugin.md) — swipe and sync between two maps with [maplibre-gl-compare](https://github.com/maplibre/maplibre-gl-compare)
 - [Minimap plugin](./minimap-plugin.md) — overview minimap control ([mapboxgl-minimap](https://github.com/aesqe/mapboxgl-minimap))
 - [Frame rate plugin](./framerate-plugin.md) — rendering performance overlay ([mapbox-gl-framerate](https://github.com/mapbox/mapbox-gl-framerate))
+- [Geo grid plugin](./geogrid-plugin.md) — geographic graticule with labels ([geogrid-maplibre-gl](https://github.com/falseinput/geogrid-maplibre-gl))
 - [Mapbox GL Draw plugin](./mapbox-gl-draw-plugin.md) — reference plugin in the examples solution

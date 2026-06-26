@@ -33,5 +33,6 @@ builder.RootComponents.RegisterCustomElement<GlobeAtmosphere>("globe-atmosphere"
 builder.RootComponents.RegisterCustomElement<ColorReliefTerrain>("color-relief-terrain");
 builder.RootComponents.RegisterCustomElement<Minimap>("map-minimap");
 builder.RootComponents.RegisterCustomElement<Framerate>("map-framerate");
+builder.RootComponents.RegisterCustomElement<GeoGrid>("map-geogrid");
 
 await builder.Build().RunAsync();

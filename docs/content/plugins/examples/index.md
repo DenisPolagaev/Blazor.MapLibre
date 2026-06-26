@@ -8,6 +8,7 @@ Each page embeds a live Blazor custom element from the examples project.
 | [Map Compare](./map-compare.md) | `<map-compare>` |
 | [Minimap](./minimap.md) | `<map-minimap>` |
 | [Frame rate](./framerate.md) | `<map-framerate>` |
+| [Geo grid](./geogrid.md) | `<map-geogrid>` |
 | [Mapbox GL Draw](./mapbox-gl-draw.md) | `<mapbox-gl-draw>` |
 
 For map API samples that are not plugins, use the **Examples** section in the site navigation.

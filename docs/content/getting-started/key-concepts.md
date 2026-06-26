@@ -42,4 +42,4 @@ The library features an extensible plugin system.
 - Provides a standardized way to extend maps with specialized features
 - Maintains a clean separation between core library and optional extensions
 
-See the [Plugins](../plugins/index.md) section for [creating a plugin](../plugins/create-a-plugin.md) and the built-in plugin packages (Terra Draw, Map Compare, Minimap, Frame rate, and the Mapbox GL Draw reference implementation).
+See the [Plugins](../plugins/index.md) section for [creating a plugin](../plugins/create-a-plugin.md) and the built-in plugin packages (Terra Draw, Map Compare, Minimap, Frame rate, Geo grid, and the Mapbox GL Draw reference implementation).

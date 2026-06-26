@@ -18,6 +18,7 @@ For architecture context, see [Key concepts — Plugin system](../getting-starte
 | [Map Compare](./map-compare-plugin.md) | `Community.Blazor.MapLibre.ComparePlugin` | Swipe slider to compare two maps with [maplibre-gl-compare](https://github.com/maplibre/maplibre-gl-compare) |
 | [Minimap](./minimap-plugin.md) | `Community.Blazor.MapLibre.MinimapPlugin` | Overview map with viewport rectangle ([mapboxgl-minimap](https://github.com/aesqe/mapboxgl-minimap)) |
 | [Frame rate](./framerate-plugin.md) | `Community.Blazor.MapLibre.FrameratePlugin` | Live FPS overlay while the map moves ([mapbox-gl-framerate](https://github.com/mapbox/mapbox-gl-framerate)) |
+| [Geo grid](./geogrid-plugin.md) | `Community.Blazor.MapLibre.GeoGridPlugin` | Geographic graticule with coordinate labels ([geogrid-maplibre-gl](https://github.com/falseinput/geogrid-maplibre-gl)) |
 | [Mapbox GL Draw](./mapbox-gl-draw-plugin.md) | `Community.Blazor.MapLibre.Examples.MapboxGlPlugin` | Reference plugin using [Mapbox GL Draw](https://github.com/mapbox/mapbox-gl-draw) (examples project) |
 
 ## Live examples

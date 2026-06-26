@@ -1,24 +1,4 @@
-import { GeoGrid } from './geogrid/index.js';
-
-let mapObject = null;
-let geoGridInstance = null;
-let stylesheetLoaded = false;
-
-function ensureStylesheet() {
-    if (stylesheetLoaded) {
-        return;
-    }
-
-    const href = new URL('geogrid/geogrid.css', import.meta.url).href;
-    if (!document.querySelector(`link[href="${href}"]`)) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = href;
-        document.head.appendChild(link);
-    }
-
-    stylesheetLoaded = true;
-}
+import { GeoGrid, detachGeoGrid } from './geogrid/index.js';
 
 function resolveGridDensity(options) {
     if (options.gridDensityDegrees != null) {
@@ -71,53 +51,23 @@ function normalizeOptions(options) {
     return normalized;
 }
 
-function ensureGridVisible() {
-    if (!geoGridInstance || !mapObject) {
-        return;
+export function add(map, options) {
+    if (!map) {
+        throw new Error('GeoGrid plugin requires a map instance.');
     }
 
-    if (typeof mapObject.loaded === 'function' && mapObject.loaded()) {
-        geoGridInstance.add();
-    }
-}
-
-export async function initialize(map) {
-    mapObject = map;
-    ensureStylesheet();
-}
-
-export function add(options) {
-    if (!mapObject) {
-        throw new Error('GeoGrid plugin is not initialized.');
-    }
-
-    remove();
-
-    const normalized = normalizeOptions(options);
-    geoGridInstance = new GeoGrid({
-        map: mapObject,
-        ...normalized,
+    detachGeoGrid(map);
+    const instance = new GeoGrid({
+        map,
+        ...normalizeOptions(options),
     });
-
-    ensureGridVisible();
+    instance.add();
 }
 
-export function remove() {
-    if (geoGridInstance) {
-        geoGridInstance.remove();
-        geoGridInstance = null;
-    }
+export function remove(map) {
+    detachGeoGrid(map);
 }
 
-export function show() {
-    if (!geoGridInstance) {
-        throw new Error('GeoGrid is not created. Call add() first.');
-    }
-
-    geoGridInstance.add();
-}
-
-export function dispose() {
-    remove();
-    mapObject = null;
+export function dispose(map) {
+    detachGeoGrid(map);
 }

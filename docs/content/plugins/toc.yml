@@ -11,6 +11,8 @@
   href: minimap-plugin.md
 - name: Frame rate plugin
   href: framerate-plugin.md
+- name: Geo grid plugin
+  href: geogrid-plugin.md
 - name: Mapbox GL Draw plugin
   href: mapbox-gl-draw-plugin.md
 - name: Plugin examples

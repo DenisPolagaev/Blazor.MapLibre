@@ -4,7 +4,9 @@
 @using Community.Blazor.MapLibre.Models
 @implements IAsyncDisposable
 
-<ViewOnGitHub FilePath="examples/Community.Blazor.MapLibre.Examples/Examples/GeoGrid.razor"/>
+<link rel="stylesheet" href="_content/GeoGridPlugin/geogrid/geogrid.css" />
+
+<ViewOnGitHub FilePath="examples/Community.Blazor.MapLibre.Examples/Examples/GeoGrid.razor" />
 
 <p class="text-muted">
     Geographic graticule with coordinate labels, powered by
@@ -30,6 +32,22 @@
     private MapLibre _map = new();
     private readonly GeoGridPlugin _geoGrid = new();
     private bool _geoGridVisible = true;
+    private bool _pendingGeoGridAdd;
+
+    private static readonly GeoGridOptions DefaultGeoGridOptions = new()
+    {
+        GridStyle = new GeoGridLineStyle
+        {
+            Color = "rgba(15, 23, 42, 0.25)",
+            Width = 1,
+        },
+        LabelStyle = new GeoGridLabelStyle
+        {
+            Color = "rgba(15, 23, 42, 0.8)",
+            FontSize = "12px",
+        },
+        ZoomLevelRange = [0, 14],
+    };
 
     private readonly MapOptions _mapOptions = new()
     {
@@ -43,25 +61,35 @@
         if (firstRender)
         {
             await _map.RegisterPlugin(_geoGrid);
+
+            if (_pendingGeoGridAdd)
+            {
+                await AddGeoGridIfVisibleAsync();
+            }
         }
     }
 
     private async Task OnMapLoad(EventArgs _)
     {
-        await _geoGrid.AddGeoGridAsync(new GeoGridOptions
+        if (!_geoGrid.IsInitialized)
         {
-            GridStyle = new GeoGridLineStyle
-            {
-                Color = "rgba(15, 23, 42, 0.25)",
-                Width = 1,
-            },
-            LabelStyle = new GeoGridLabelStyle
-            {
-                Color = "rgba(15, 23, 42, 0.8)",
-                FontSize = "12px",
-            },
-            ZoomLevelRange = [0, 14],
-        });
+            _pendingGeoGridAdd = true;
+            return;
+        }
+
+        await AddGeoGridIfVisibleAsync();
+    }
+
+    private async Task AddGeoGridIfVisibleAsync()
+    {
+        _pendingGeoGridAdd = false;
+
+        if (!_geoGridVisible)
+        {
+            return;
+        }
+
+        await _geoGrid.AddGeoGridAsync(DefaultGeoGridOptions);
     }
 
     private async Task ToggleGeoGridAsync(ChangeEventArgs args)
@@ -70,20 +98,7 @@
 
         if (_geoGridVisible)
         {
-            await _geoGrid.AddGeoGridAsync(new GeoGridOptions
-            {
-                GridStyle = new GeoGridLineStyle
-                {
-                    Color = "rgba(15, 23, 42, 0.25)",
-                    Width = 1,
-                },
-                LabelStyle = new GeoGridLabelStyle
-                {
-                    Color = "rgba(15, 23, 42, 0.8)",
-                    FontSize = "12px",
-                },
-                ZoomLevelRange = [0, 14],
-            });
+            await _geoGrid.ShowGeoGridAsync();
         }
         else
         {

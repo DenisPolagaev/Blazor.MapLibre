@@ -3,4 +3,5 @@ terra-draw
 map-compare
 minimap
 framerate
+geogrid
 mapbox-gl-draw
