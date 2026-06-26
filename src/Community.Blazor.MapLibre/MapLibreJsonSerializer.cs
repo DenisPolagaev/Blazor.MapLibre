@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Community.Blazor.MapLibre;
 
@@ -11,5 +12,16 @@ public static class MapLibreJsonSerializer
     {
         AllowOutOfOrderMetadataProperties = true,
         PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>
+    /// Serializer options for <see cref="Models.Request.TransformRequestResult"/>.
+    /// Omits unset optional fields so MapLibre receives a valid <c>RequestParameters</c> object.
+    /// </summary>
+    public static JsonSerializerOptions TransformRequestOptions { get; } = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter() },
     };
 }

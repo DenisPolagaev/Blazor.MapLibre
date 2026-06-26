@@ -16,7 +16,7 @@ The `MapLibre` component wraps MapLibre GL JS 5.17. Key methods added in recent 
 ## Camera and time
 
 - `SetTransformConstrain` / `TransformConstrain` parameter on the component
-- `SetTransformRequest` — customize tile/glyph/sprite HTTP requests from C#
+- `SetTransformRequest` — customize tile/glyph/sprite HTTP requests from C#; return `TransformRequestResult` with only the MapLibre `RequestParameters` fields you need (`url`, optional `headers`, `credentials`, etc.)
 - `SetEventedParent` — bubble events to another map by its `MapId`
 - `TimeControlSetNow`, `TimeControlRestoreNow`, `TimeControlIsFrozen`
 

@@ -194,11 +194,69 @@ function geometryIntersectsBbox(geometry, bbox) {
 
 const customLayerHandlers = new Map();
 
+const REQUEST_METHODS = new Set(['GET', 'POST', 'PUT']);
+const REQUEST_CREDENTIALS = new Set(['same-origin', 'include']);
+const RESPONSE_BODY_TYPES = new Set(['string', 'json', 'arrayBuffer', 'image']);
+
+/**
+ * Normalizes a .NET transformRequest payload to MapLibre GL JS RequestParameters.
+ * MapLibre passes the result directly to fetch/XMLHttpRequest; optional fields must be
+ * omitted rather than set to null. See maplibre-gl-js src/util/ajax.ts and request_manager.ts.
+ * @param {unknown} result
+ * @param {string} fallbackUrl
+ * @returns {{ url: string, headers?: object, method?: string, body?: string, type?: string, credentials?: string, collectResourceTiming?: boolean, cache?: string, referrerPolicy?: string }}
+ */
+function normalizeRequestParameters(result, fallbackUrl) {
+    const source = result && typeof result === 'object' ? result : {};
+    const normalized = {
+        url: typeof source.url === 'string' && source.url.length > 0 ? source.url : fallbackUrl
+    };
+
+    if (source.headers && typeof source.headers === 'object' && !Array.isArray(source.headers)) {
+        normalized.headers = source.headers;
+    }
+
+    if (REQUEST_METHODS.has(source.method)) {
+        normalized.method = source.method;
+    }
+
+    if (typeof source.body === 'string') {
+        normalized.body = source.body;
+    }
+
+    if (RESPONSE_BODY_TYPES.has(source.type)) {
+        normalized.type = source.type;
+    }
+
+    if (REQUEST_CREDENTIALS.has(source.credentials)) {
+        normalized.credentials = source.credentials;
+    }
+
+    if (source.collectResourceTiming === true) {
+        normalized.collectResourceTiming = true;
+    }
+
+    if (typeof source.cache === 'string' && source.cache.length > 0) {
+        normalized.cache = source.cache;
+    }
+
+    if (typeof source.referrerPolicy === 'string' && source.referrerPolicy.length > 0) {
+        normalized.referrerPolicy = source.referrerPolicy;
+    }
+
+    return normalized;
+}
+
 function createTransformRequestFn(dotnetReference) {
     return (url, resourceType) => {
         const payload = JSON.stringify({ url, resourceType });
         const resultJson = dotnetReference.invokeMethod('Invoke', payload);
-        return JSON.parse(resultJson);
+
+        try {
+            return normalizeRequestParameters(JSON.parse(resultJson), url);
+        } catch {
+            return { url };
+        }
     };
 }
 
@@ -566,6 +624,39 @@ export function setScaleControlUnit(container, unit) {
 }
 
 /**
+ * Loads an image for map.addImage. MapLibre map.loadImage uses fetch + decode and
+ * cannot reliably decode SVG. For SVG (and as a fallback for other decode failures)
+ * we load through HTMLImageElement, which MapLibre also accepts.
+ * @param {import('maplibre-gl').Map} map
+ * @param {string} url
+ * @returns {Promise<HTMLImageElement|ImageBitmap|ImageData>}
+ */
+async function loadMapImageSource(map, url) {
+    const normalizedUrl = typeof url === 'string' ? url.trim() : '';
+    const isSvg = normalizedUrl.toLowerCase().includes('.svg');
+
+    if (!isSvg) {
+        try {
+            const resourceResponse = await map.loadImage(url);
+            return resourceResponse.data;
+        } catch {
+            // Fall back to HTMLImageElement below.
+        }
+    }
+
+    return await loadHtmlImageElement(url);
+}
+
+function loadHtmlImageElement(url) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error(`Unable to decode map image '${url}'.`));
+        image.src = url;
+    });
+}
+
+/**
  * Asynchronously adds an image to a map instance for the specified container.
  *
  * @param {string} container - The identifier of the map container.
@@ -577,11 +668,12 @@ export function setScaleControlUnit(container, unit) {
 export async function addImage(container, id, url, options) {
     const map = mapInstances[container];
     if (map.hasImage(id)) return;
-    const resourceResponse = await mapInstances[container].loadImage(url);
+
+    const image = await loadMapImageSource(map, url);
     if (options === undefined || options === null) {
-        map.addImage(id, resourceResponse.data);
+        map.addImage(id, image);
     } else {
-        map.addImage(id, resourceResponse.data, options);
+        map.addImage(id, image, options);
     }
 }
 
@@ -650,6 +742,25 @@ export function setSourceDataAsJson(container, id, data) {
         throw new Error(`Could not find source with id ${id}`);
     }
     source.setData(jsonData);
+}
+
+/**
+ * Updates tile URLs for an existing vector tile source.
+ * @param {string} container - The map container.
+ * @param {string} id - The source id.
+ * @param {string[]} tiles - The new tile URL templates.
+ */
+export function setVectorSourceTiles(container, id, tiles) {
+    const source = mapInstances[container].getSource(id);
+    if (source === undefined) {
+        throw new Error(`Could not find source with id ${id}`);
+    }
+
+    if (typeof source.setTiles !== "function") {
+        throw new Error(`Source "${id}" does not support setTiles.`);
+    }
+
+    source.setTiles(tiles);
 }
 
 /**
@@ -1328,7 +1439,9 @@ export function loaded(container) {
  * @returns {Promise<*>} A promise resolving when the image is loaded.
  */
 export async function loadImage(container, url) {
-    return await mapInstances[container].loadImage(url);
+    const map = mapInstances[container];
+    const data = await loadMapImageSource(map, url);
+    return { data };
 }
 
 /**
@@ -2283,6 +2396,9 @@ export async function executeTransaction(container, data) {
                 break;
             case "setSourceDataAsJson":
                 setSourceDataAsJson(container, d.data[0], d.data[1]);
+                break;
+            case "setVectorSourceTiles":
+                setVectorSourceTiles(container, d.data[0], d.data[1]);
                 break;
             case "updateSourceData":
                 updateSourceData(container, d.data[0], d.data[1], d.data[2] ?? false);

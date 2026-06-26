@@ -815,6 +815,7 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Adds an image to the map for use in styling or layer configuration.
+    /// Supports PNG/JPEG/WebP via MapLibre <c>loadImage</c> and SVG via HTMLImageElement fallback.
     /// </summary>
     /// <param name="id">The unique identifier for the image to be added to the map.</param>
     /// <param name="url">The URL pointing to the image resource to be added.</param>
@@ -885,6 +886,22 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         }
 
         await _jsModule.InvokeVoidAsync("setSourceDataAsJson", JsContainerId, id, data);
+    }
+
+    /// <summary>
+    /// Updates tile URLs for an existing vector tile source without removing dependent layers.
+    /// </summary>
+    /// <param name="id">The vector source id.</param>
+    /// <param name="tiles">The new tile URL templates.</param>
+    public async ValueTask SetVectorSourceTiles(string id, IReadOnlyList<string> tiles)
+    {
+        if (_bulkTransaction is not null)
+        {
+            _bulkTransaction.Add("setVectorSourceTiles", id, tiles);
+            return;
+        }
+
+        await _jsModule.InvokeVoidAsync("setVectorSourceTiles", JsContainerId, id, tiles);
     }
 
     /// <summary>
@@ -1447,6 +1464,8 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Sets a callback to customize HTTP requests for map resources (tiles, glyphs, sprites, etc.).
+    /// The callback must return a MapLibre <c>RequestParameters</c> object: set only the fields you want
+    /// to override. Optional fields such as <c>credentials</c> must be omitted when unused.
     /// Pass <c>null</c> to clear the callback.
     /// </summary>
     public async ValueTask SetTransformRequest(Func<TransformRequestInput, TransformRequestResult>? handler)

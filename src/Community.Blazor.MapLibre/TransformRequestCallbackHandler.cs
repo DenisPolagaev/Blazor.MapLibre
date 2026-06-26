@@ -6,17 +6,18 @@ namespace Community.Blazor.MapLibre;
 
 internal sealed class TransformRequestCallbackHandler(Func<TransformRequestInput, TransformRequestResult> handler)
 {
-    private static readonly JsonSerializerOptions Serializer = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
     [JSInvokable]
     public string Invoke(string requestJson)
     {
-        var input = JsonSerializer.Deserialize<TransformRequestInput>(requestJson, Serializer)
+        var input = JsonSerializer.Deserialize<TransformRequestInput>(requestJson, MapLibreJsonSerializer.TransformRequestOptions)
                     ?? new TransformRequestInput();
         var output = handler(input);
-        return JsonSerializer.Serialize(output, Serializer);
+
+        if (string.IsNullOrWhiteSpace(output.Url))
+        {
+            output.Url = input.Url;
+        }
+
+        return JsonSerializer.Serialize(output, MapLibreJsonSerializer.TransformRequestOptions);
     }
 }
