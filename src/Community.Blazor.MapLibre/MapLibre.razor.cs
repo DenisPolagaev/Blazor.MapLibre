@@ -282,6 +282,10 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
             // Ignore
             // https://learn.microsoft.com/en-us/aspnet/core/blazor/javascript-interoperability/?view=aspnetcore-8.0#javascript-interop-calls-without-a-circuit
         }
+        catch (ObjectDisposedException)
+        {
+            // JS module may already be disposed when parent and child both participate in teardown.
+        }
     }
 
     #endregion
