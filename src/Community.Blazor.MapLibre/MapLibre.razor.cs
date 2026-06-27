@@ -1033,6 +1033,15 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeVoidAsync("fitBounds", JsContainerId, bounds, options, eventData);
 
     /// <summary>
+    /// Fits the map view to the geographic extent of a style layer already added to the map.
+    /// </summary>
+    /// <param name="layerId">The style layer identifier.</param>
+    /// <param name="options">Optional fit bounds options.</param>
+    /// <returns><c>true</c> when bounds were applied; otherwise <c>false</c>.</returns>
+    public async ValueTask<bool> FitToLayer(string layerId, FitBoundOptions? options = null) =>
+        await _jsModule.InvokeAsync<bool>("fitToLayer", JsContainerId, layerId, options);
+
+    /// <summary>
     /// Sets or clears the map's geographical bounds.
     /// </summary>
     /// <param name="bounds">The maximum bounds to set, or null to remove the map's maximum bounds.</param>

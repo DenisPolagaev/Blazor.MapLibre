@@ -897,6 +897,91 @@ export function fitBounds(container, bounds, options, eventData) {
 }
 
 /**
+ * Fits the map view to the geographic extent of an added style layer.
+ * Uses GeoJSON source.getBounds() when available, otherwise querySourceFeatures.
+ * @param {string} container - The map container identifier.
+ * @param {string} layerId - The style layer id.
+ * @param {Object} [options] - fitBounds options.
+ * @returns {Promise<boolean>} True when bounds were applied.
+ */
+export async function fitToLayer(container, layerId, options) {
+    const map = mapInstances[container];
+    const layer = map.getLayer(layerId);
+    if (!layer) {
+        return false;
+    }
+
+    const bounds = await resolveLayerBounds(map, layer.source, layer['source-layer']);
+    if (!bounds) {
+        return false;
+    }
+
+    map.fitBounds(bounds, options);
+    return true;
+}
+
+async function resolveLayerBounds(map, sourceId, sourceLayer) {
+    const source = map.getSource(sourceId);
+    if (!source) {
+        return null;
+    }
+
+    if (typeof source.getBounds === 'function') {
+        const result = source.getBounds();
+        const bounds = result instanceof Promise ? await result : result;
+        if (bounds && !bounds.isEmpty()) {
+            return bounds;
+        }
+    }
+
+    let bounds = querySourceFeatureBounds(map, sourceId, sourceLayer);
+    if (bounds) {
+        return bounds;
+    }
+
+    await new Promise(resolve => map.once('idle', resolve));
+    return querySourceFeatureBounds(map, sourceId, sourceLayer);
+}
+
+function querySourceFeatureBounds(map, sourceId, sourceLayer) {
+    const queryParams = sourceLayer ? { sourceLayer } : undefined;
+    const features = map.querySourceFeatures(sourceId, queryParams);
+    if (!features?.length) {
+        return null;
+    }
+
+    const bounds = new maplibregl.LngLatBounds();
+    for (const feature of features) {
+        extendGeometryBounds(bounds, feature.geometry);
+    }
+
+    return bounds.isEmpty() ? null : bounds;
+}
+
+function extendGeometryBounds(bounds, geometry) {
+    if (!geometry?.coordinates) {
+        return;
+    }
+
+    extendCoordinateBounds(bounds, geometry.coordinates, geometry.type);
+}
+
+function extendCoordinateBounds(bounds, coordinates, geometryType) {
+    if (!coordinates?.length) {
+        return;
+    }
+
+    if (geometryType === 'Point' || typeof coordinates[0] === 'number') {
+        bounds.extend(coordinates);
+        return;
+    }
+
+    for (const child of coordinates) {
+        extendCoordinateBounds(bounds, child, null);
+    }
+}
+
+/**
  * Adjusts the map view to fit the given screen coordinates.
  *
  * @function fitScreenCoordinates
