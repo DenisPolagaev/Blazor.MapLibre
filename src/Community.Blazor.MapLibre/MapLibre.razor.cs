@@ -1037,13 +1037,44 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeVoidAsync("fitBounds", JsContainerId, bounds, options, eventData);
 
     /// <summary>
-    /// Fits the map view to the geographic extent of a style layer already added to the map.
+    /// Fits the map view to a style layer already added to the map.
     /// </summary>
+    /// <remarks>
+    /// This method first uses stable source bounds when available, such as GeoJSON source bounds,
+    /// vector/raster source metadata bounds, or image/video coordinates. If no source bounds are
+    /// available, it falls back to features currently loaded for the layer.
+    /// </remarks>
     /// <param name="layerId">The style layer identifier.</param>
     /// <param name="options">Optional fit bounds options.</param>
     /// <returns><c>true</c> when bounds were applied; otherwise <c>false</c>.</returns>
     public async ValueTask<bool> FitToLayer(string layerId, FitBoundOptions? options = null) =>
         await _jsModule.InvokeAsync<bool>("fitToLayer", JsContainerId, layerId, options);
+
+    /// <summary>
+    /// Fits the map view to stable bounds declared or calculated by a source.
+    /// </summary>
+    /// <remarks>
+    /// For vector and raster sources this uses the source <c>bounds</c> metadata when present.
+    /// For GeoJSON sources this uses MapLibre's source bounds calculation.
+    /// </remarks>
+    /// <param name="sourceId">The source identifier.</param>
+    /// <param name="options">Optional fit bounds options.</param>
+    /// <returns><c>true</c> when bounds were applied; otherwise <c>false</c>.</returns>
+    public async ValueTask<bool> FitToSourceBounds(string sourceId, FitBoundOptions? options = null) =>
+        await _jsModule.InvokeAsync<bool>("fitToSourceBounds", JsContainerId, sourceId, options);
+
+    /// <summary>
+    /// Fits the map view to features currently loaded for a style layer.
+    /// </summary>
+    /// <remarks>
+    /// This is useful for vector tile layers without source bounds metadata, but the result depends
+    /// on the tiles currently loaded by MapLibre and may not cover the entire dataset.
+    /// </remarks>
+    /// <param name="layerId">The style layer identifier.</param>
+    /// <param name="options">Optional fit bounds options.</param>
+    /// <returns><c>true</c> when bounds were applied; otherwise <c>false</c>.</returns>
+    public async ValueTask<bool> FitToLoadedLayerFeatures(string layerId, FitBoundOptions? options = null) =>
+        await _jsModule.InvokeAsync<bool>("fitToLoadedLayerFeatures", JsContainerId, layerId, options);
 
     /// <summary>
     /// Sets or clears the map's geographical bounds.

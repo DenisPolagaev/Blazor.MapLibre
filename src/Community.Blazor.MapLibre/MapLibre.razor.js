@@ -897,8 +897,9 @@ export function fitBounds(container, bounds, options, eventData) {
 }
 
 /**
- * Fits the map view to the geographic extent of an added style layer.
- * Uses GeoJSON source.getBounds() when available, otherwise querySourceFeatures.
+ * Fits the map view to an added style layer.
+ * Prefers stable source bounds (GeoJSON getBounds, vector/raster bounds, image/video coordinates)
+ * and falls back to the layer's currently loaded source features.
  * @param {string} container - The map container identifier.
  * @param {string} layerId - The style layer id.
  * @param {Object} [options] - fitBounds options.
@@ -906,13 +907,168 @@ export function fitBounds(container, bounds, options, eventData) {
  */
 export async function fitToLayer(container, layerId, options) {
     const map = mapInstances[container];
-    const layer = map.getLayer(layerId);
-    if (!layer) {
+    const layer = map?.getLayer(layerId);
+    if (!layer?.source) {
         return false;
     }
 
-    const bounds = await resolveLayerBounds(map, layer.source, layer['source-layer']);
-    if (!bounds) {
+    const bounds = await resolveLayerBounds(map, layer, true);
+    return fitResolvedBounds(map, bounds, options);
+}
+
+/**
+ * Fits the map view to stable bounds declared or calculated by a source.
+ * For vector/raster sources this uses the source `bounds` metadata when present.
+ * @param {string} container - The map container identifier.
+ * @param {string} sourceId - The source id.
+ * @param {Object} [options] - fitBounds options.
+ * @returns {Promise<boolean>} True when bounds were applied.
+ */
+export async function fitToSourceBounds(container, sourceId, options) {
+    const map = mapInstances[container];
+    if (!map) {
+        return false;
+    }
+
+    const bounds = await resolveSourceBounds(map, sourceId);
+    return fitResolvedBounds(map, bounds, options);
+}
+
+/**
+ * Fits the map view to source features that are currently loaded for a layer.
+ * This is useful for vector tiles, but it is viewport/tile-cache dependent.
+ * @param {string} container - The map container identifier.
+ * @param {string} layerId - The style layer id.
+ * @param {Object} [options] - fitBounds options.
+ * @returns {Promise<boolean>} True when bounds were applied.
+ */
+export async function fitToLoadedLayerFeatures(container, layerId, options) {
+    const map = mapInstances[container];
+    const layer = map?.getLayer(layerId);
+    if (!layer?.source) {
+        return false;
+    }
+
+    const bounds = await resolveLoadedLayerFeatureBounds(map, layer);
+    return fitResolvedBounds(map, bounds, options);
+}
+
+async function resolveLayerBounds(map, layer, includeLoadedFeatures) {
+    const sourceBounds = await resolveSourceBounds(map, layer.source);
+    if (sourceBounds) {
+        return sourceBounds;
+    }
+
+    return includeLoadedFeatures ? await resolveLoadedLayerFeatureBounds(map, layer) : null;
+}
+
+async function resolveSourceBounds(map, sourceId) {
+    const source = map.getSource(sourceId);
+    if (!source) {
+        return null;
+    }
+
+    if (typeof source.getBounds === 'function') {
+        try {
+            const result = source.getBounds();
+            const bounds = result instanceof Promise ? await result : result;
+            if (bounds && !bounds.isEmpty()) {
+                return bounds;
+            }
+        } catch {
+            // Fall back to declared source metadata below.
+        }
+    }
+
+    const sourceSpec = map.getStyle()?.sources?.[sourceId];
+    return boundsFromRuntimeSource(source) ?? boundsFromSourceSpec(sourceSpec);
+}
+
+async function resolveLoadedLayerFeatureBounds(map, layer) {
+    let bounds = querySourceFeatureBounds(map, layer);
+    if (bounds || map.loaded?.()) {
+        return bounds;
+    }
+
+    await waitForIdle(map);
+    return querySourceFeatureBounds(map, layer);
+}
+
+function querySourceFeatureBounds(map, layer) {
+    const queryParams = createLayerFeatureQuery(layer);
+    const sourceId = layer.source;
+    const features = map.querySourceFeatures(sourceId, queryParams);
+    if (!features?.length) {
+        return null;
+    }
+
+    const bounds = new globalThis.maplibregl.LngLatBounds();
+    for (const feature of features) {
+        extendGeometryBounds(bounds, feature.geometry);
+    }
+
+    return bounds.isEmpty() ? null : bounds;
+}
+
+function createLayerFeatureQuery(layer) {
+    const queryParams = {};
+    if (layer['source-layer']) {
+        queryParams.sourceLayer = layer['source-layer'];
+    }
+    if (layer.filter) {
+        queryParams.filter = layer.filter;
+    }
+
+    return Object.keys(queryParams).length > 0 ? queryParams : undefined;
+}
+
+function boundsFromSourceSpec(sourceSpec) {
+    if (!sourceSpec) {
+        return null;
+    }
+
+    const declaredBounds = boundsFromLngLatArray(sourceSpec.bounds);
+    if (declaredBounds) {
+        return declaredBounds;
+    }
+
+    return boundsFromCoordinates(sourceSpec.coordinates);
+}
+
+function boundsFromRuntimeSource(source) {
+    return boundsFromLngLatArray(source.bounds) ?? boundsFromCoordinates(source.coordinates);
+}
+
+function boundsFromLngLatArray(boundsArray) {
+    if (!Array.isArray(boundsArray) || boundsArray.length < 4) {
+        return null;
+    }
+
+    const bounds = new globalThis.maplibregl.LngLatBounds(
+        [boundsArray[0], boundsArray[1]],
+        [boundsArray[2], boundsArray[3]]
+    );
+
+    return bounds.isEmpty() ? null : bounds;
+}
+
+function boundsFromCoordinates(coordinates) {
+    if (!Array.isArray(coordinates) || coordinates.length === 0) {
+        return null;
+    }
+
+    const bounds = new globalThis.maplibregl.LngLatBounds();
+    for (const coordinate of coordinates) {
+        if (Array.isArray(coordinate) && coordinate.length >= 2) {
+            bounds.extend(coordinate);
+        }
+    }
+
+    return bounds.isEmpty() ? null : bounds;
+}
+
+function fitResolvedBounds(map, bounds, options) {
+    if (!map || !bounds || bounds.isEmpty()) {
         return false;
     }
 
@@ -920,42 +1076,23 @@ export async function fitToLayer(container, layerId, options) {
     return true;
 }
 
-async function resolveLayerBounds(map, sourceId, sourceLayer) {
-    const source = map.getSource(sourceId);
-    if (!source) {
-        return null;
-    }
+function waitForIdle(map) {
+    return new Promise(resolve => {
+        let resolved = false;
+        const finish = () => {
+            if (resolved) {
+                return;
+            }
 
-    if (typeof source.getBounds === 'function') {
-        const result = source.getBounds();
-        const bounds = result instanceof Promise ? await result : result;
-        if (bounds && !bounds.isEmpty()) {
-            return bounds;
-        }
-    }
+            resolved = true;
+            clearTimeout(timeoutId);
+            map.off('idle', finish);
+            resolve();
+        };
+        const timeoutId = setTimeout(finish, 1000);
 
-    let bounds = querySourceFeatureBounds(map, sourceId, sourceLayer);
-    if (bounds) {
-        return bounds;
-    }
-
-    await new Promise(resolve => map.once('idle', resolve));
-    return querySourceFeatureBounds(map, sourceId, sourceLayer);
-}
-
-function querySourceFeatureBounds(map, sourceId, sourceLayer) {
-    const queryParams = sourceLayer ? { sourceLayer } : undefined;
-    const features = map.querySourceFeatures(sourceId, queryParams);
-    if (!features?.length) {
-        return null;
-    }
-
-    const bounds = new maplibregl.LngLatBounds();
-    for (const feature of features) {
-        extendGeometryBounds(bounds, feature.geometry);
-    }
-
-    return bounds.isEmpty() ? null : bounds;
+        map.once('idle', finish);
+    });
 }
 
 function extendGeometryBounds(bounds, geometry) {
