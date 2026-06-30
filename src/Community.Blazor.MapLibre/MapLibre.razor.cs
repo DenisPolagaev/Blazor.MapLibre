@@ -1548,6 +1548,16 @@ public partial class MapLibre : ComponentBase, IAsyncDisposable
         await _jsModule.InvokeAsync<double>("getZoom", JsContainerId);
 
     /// <summary>
+    /// Returns the zoom level at which a clustered GeoJSON source expands the given cluster.
+    /// </summary>
+    public async ValueTask<double> GetClusterExpansionZoom(string sourceId, int clusterId) =>
+        await _jsModule.InvokeAsync<double>(
+            "getClusterExpansionZoom",
+            JsContainerId,
+            sourceId,
+            clusterId);
+
+    /// <summary>
     /// Checks if a specific control exists on the map.
     /// </summary>
     /// <param name="control">The control instance to check for.</param>

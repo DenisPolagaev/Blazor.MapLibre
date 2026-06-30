@@ -382,6 +382,23 @@ export function getMap(container) {
     return mapInstances[container];
 }
 
+/**
+ * Returns the zoom level at which the given cluster expands.
+ */
+export async function getClusterExpansionZoom(container, sourceId, clusterId) {
+    const map = mapInstances[container];
+    if (!map) {
+        throw new Error(`Map instance '${container}' was not found.`);
+    }
+
+    const source = map.getSource(sourceId);
+    if (!source || typeof source.getClusterExpansionZoom !== 'function') {
+        throw new Error(`Source '${sourceId}' does not support clustering.`);
+    }
+
+    return await source.getClusterExpansionZoom(clusterId);
+}
+
 
 function createMapEventHandler(dotnetReference, throttleMs) {
     let lastInvoke = 0;
