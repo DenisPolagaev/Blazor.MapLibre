@@ -62,17 +62,19 @@ public sealed class GeoGridPlugin : IMapLibrePlugin
     }
 
     /// <summary>
-    /// Re-attaches the grid after <see cref="RemoveGeoGridAsync"/> using the last options.
+    /// Re-attaches the grid after <see cref="RemoveGeoGridAsync"/> using the last options,
+    /// or the supplied options when the grid has not been added yet.
     /// </summary>
-    public async ValueTask ShowGeoGridAsync()
+    public async ValueTask ShowGeoGridAsync(GeoGridOptions? options = null)
     {
-        if (_activeOptions is null)
+        var resolvedOptions = options ?? _activeOptions;
+        if (resolvedOptions is null)
         {
             throw new InvalidOperationException(
-                "GeoGrid has not been added yet. Call AddGeoGridAsync first.");
+                "GeoGrid has not been added yet. Call AddGeoGridAsync first or pass options to ShowGeoGridAsync.");
         }
 
-        await AddGeoGridAsync(_activeOptions);
+        await AddGeoGridAsync(resolvedOptions);
     }
 
     public async ValueTask DisposeAsync()
