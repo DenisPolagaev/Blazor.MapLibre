@@ -304,21 +304,7 @@ class GeoGrid {
             }
 
             if (typeof this.map.isStyleLoaded === 'function' && this.map.isStyleLoaded()) {
-                if (this.map.getLayer(this.config.parallersLayerName)) {
-                    this.map.removeLayer(this.config.parallersLayerName);
-                }
-
-                if (this.map.getLayer(this.config.meridiansLayerName)) {
-                    this.map.removeLayer(this.config.meridiansLayerName);
-                }
-
-                if (this.map.getSource(this.config.parallersSourceName)) {
-                    this.map.removeSource(this.config.parallersSourceName);
-                }
-
-                if (this.map.getSource(this.config.meridiansSourceName)) {
-                    this.map.removeSource(this.config.meridiansSourceName);
-                }
+                this.removeGridLayersAndSources();
             }
         } catch {
             // Map may already be destroyed during navigation/disposal.
@@ -337,16 +323,69 @@ class GeoGrid {
         }
     };
     onMove = () => {
+        if (typeof this.map.isStyleLoaded === 'function' && !this.map.isStyleLoaded()) {
+            return;
+        }
+
         this.updateLabelsVisibility();
         this.removeLabels();
-        const densityInDegrees = this.config.gridDensity(Math.floor(this.map.getZoom()));
+        const densityInDegrees = this.config.gridDensity(
+            Math.max(Math.floor(this.map.getZoom()), 0));
+
+        if (!this.hasGridLayersAndSources()) {
+            this.addLayersAndSources(densityInDegrees);
+            return;
+        }
+
         this.drawLabels(densityInDegrees);
         this.updateGrid(densityInDegrees);
     };
     onProjectionTransition = () => {
-        this.onMove();
+        this.map.once('idle', this.onMove);
+    };
+    hasGridLayersAndSources = () =>
+        !!this.map.getLayer(this.config.parallersLayerName)
+        && !!this.map.getLayer(this.config.meridiansLayerName)
+        && !!this.map.getSource(this.config.parallersSourceName)
+        && !!this.map.getSource(this.config.meridiansSourceName);
+    removeGridLayersAndSources = () => {
+        if (typeof this.map.isStyleLoaded === 'function' && !this.map.isStyleLoaded()) {
+            return;
+        }
+
+        try {
+            if (this.map.getLayer(this.config.parallersLayerName)) {
+                this.map.removeLayer(this.config.parallersLayerName);
+            }
+
+            if (this.map.getLayer(this.config.meridiansLayerName)) {
+                this.map.removeLayer(this.config.meridiansLayerName);
+            }
+
+            if (this.map.getSource(this.config.parallersSourceName)) {
+                this.map.removeSource(this.config.parallersSourceName);
+            }
+
+            if (this.map.getSource(this.config.meridiansSourceName)) {
+                this.map.removeSource(this.config.meridiansSourceName);
+            }
+        } catch {
+            // Style may be reloading during projection transition.
+        }
     };
     addLayersAndSources = (densityInDegrees) => {
+        if (typeof this.map.isStyleLoaded === 'function' && !this.map.isStyleLoaded()) {
+            return;
+        }
+
+        if (this.hasGridLayersAndSources()) {
+            this.updateGrid(densityInDegrees);
+            this.drawLabels(densityInDegrees);
+            return;
+        }
+
+        this.removeGridLayersAndSources();
+
         const bounds = this.map.getBounds();
         const filter = [
             'all',
@@ -451,10 +490,15 @@ class GeoGrid {
         }
     };
     updateGrid = (densityInDegrees) => {
-        const bounds = this.map.getBounds();
         const parallersSource = this.map.getSource(this.config.parallersSourceName);
-        parallersSource.setData(createMultiLineString(createParallelsGeometry(densityInDegrees, bounds)));
         const meridiansSource = this.map.getSource(this.config.meridiansSourceName);
+
+        if (!parallersSource?.setData || !meridiansSource?.setData) {
+            return;
+        }
+
+        const bounds = this.map.getBounds();
+        parallersSource.setData(createMultiLineString(createParallelsGeometry(densityInDegrees, bounds)));
         meridiansSource.setData(createMultiLineString(createMeridiansGeometry(densityInDegrees, bounds)));
     };
     updateLabelsVisibility = () => {
